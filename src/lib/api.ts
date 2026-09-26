@@ -38,6 +38,9 @@ export interface TweetData {
   media: MediaItem[];
   replyToId: string | null;
   quoted: TweetData | null;
+  /** Engagement counts when the embed endpoint exposes them */
+  likes?: number | null;
+  replies?: number | null;
 }
 
 export interface TweetResponse {

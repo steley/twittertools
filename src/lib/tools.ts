@@ -1,4 +1,4 @@
-export type ToolCategory = 'download' | 'read' | 'write' | 'dev';
+export type ToolCategory = 'download' | 'read' | 'write' | 'create' | 'dev';
 
 export interface Tool {
   slug: string;
@@ -13,6 +13,7 @@ export const CATEGORY_LABELS: Record<ToolCategory, { title: string; blurb: strin
   download: { title: 'Download Tools', blurb: 'Save videos, GIFs and photos from public posts.' },
   read: { title: 'Reader & Research', blurb: 'Unroll threads and build advanced X searches without learning operators.' },
   write: { title: 'Writing', blurb: 'Get the character count right before you post.' },
+  create: { title: 'Create & Share', blurb: 'Turn public posts into polished images you can share anywhere.' },
   dev: { title: 'Developer', blurb: 'Parse post URLs and Snowflake IDs by hand.' },
 };
 
@@ -54,6 +55,13 @@ export const TOOLS: Tool[] = [
     tagline: 'Count characters the way X does: CJK, emoji and links included.',
     category: 'write',
     icon: svg('<circle cx="12" cy="12" r="9" /><path d="M8 12h8" /><path d="M12 8v8" />'),
+  },
+  {
+    slug: '/tweet-screenshot-generator',
+    name: 'Screenshot Generator',
+    tagline: 'Turn any public post into a polished, shareable image.',
+    category: 'create',
+    icon: svg('<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" />'),
   },
   {
     slug: '/tweet-url-parser',

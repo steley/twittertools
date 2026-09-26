@@ -1,0 +1,395 @@
+/**
+ * Client-side tweet screenshot renderer: draws a TweetData as a polished
+ * card on a canvas (2x PNG export). Pure Canvas 2D — no dependencies.
+ *
+ * Images try a CORS-clean direct load first (pbs.twimg.com sends
+ * Access-Control-Allow-Origin: *) and fall back to our own media proxy,
+ * so the canvas never taints and toBlob() always succeeds.
+ */
+import { proxiedDownloadUrl, type MediaItem, type TweetData } from './api';
+
+export type CardThemeName = 'light' | 'dark';
+
+interface Palette {
+  card: string;
+  border: string;
+  text: string;
+  muted: string;
+  divider: string;
+  placeholder: string;
+  badgeBg: string;
+  badgeText: string;
+}
+
+const PALETTES: Record<CardThemeName, Palette> = {
+  light: {
+    card: '#ffffff',
+    border: '#eff3f4',
+    text: '#0f1419',
+    muted: '#536471',
+    divider: '#eff3f4',
+    placeholder: '#f0f3f5',
+    badgeBg: 'rgba(0,0,0,0.65)',
+    badgeText: '#ffffff',
+  },
+  dark: {
+    card: '#15202b',
+    border: '#38444d',
+    text: '#e7e9ea',
+    muted: '#8b98a5',
+    divider: '#38444d',
+    placeholder: '#202e3a',
+    badgeBg: 'rgba(255,255,255,0.2)',
+    badgeText: '#ffffff',
+  },
+};
+
+const BRAND = '#1d9bf0';
+const SCALE = 2; // PNG export scale
+const W = 600; // logical card width
+const PAD = 28;
+const AVATAR = 48;
+const TEXT_SIZE = 19;
+const LINE_H = 26;
+const FAMILY =
+  '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif';
+
+// --- helpers -----------------------------------------------------------------
+
+function rr(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  const rad = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rad, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rad);
+  ctx.arcTo(x + w, y + h, x, y + h, rad);
+  ctx.arcTo(x, y + h, x, y, rad);
+  ctx.arcTo(x, y, x + w, y, rad);
+  ctx.closePath();
+}
+
+function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number) {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  if (!iw || !ih) return;
+  const ratio = Math.max(dw / iw, dh / ih);
+  ctx.drawImage(img, (iw - dw / ratio) / 2, (ih - dh / ratio) / 2, dw / ratio, dh / ratio, dx, dy, dw, dh);
+}
+
+function fmtDate(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(+d)) return '';
+  const day = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' });
+  const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'UTC' });
+  return `${day} · ${time} UTC`;
+}
+
+function heart(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, color: string) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s / 12, s / 12);
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(6, 11);
+  ctx.bezierCurveTo(0.4, 7, 0.6, 2.5, 3.6, 2.5);
+  ctx.bezierCurveTo(5, 2.5, 6, 3.9, 6, 3.9);
+  ctx.bezierCurveTo(6, 3.9, 7, 2.5, 8.4, 2.5);
+  ctx.bezierCurveTo(11.4, 2.5, 11.6, 7, 6, 11);
+  ctx.fill();
+  ctx.restore();
+}
+
+function bubble(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, color: string) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s / 12, s / 12);
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.7;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  rr(ctx, 1, 1.5, 10, 7, 3);
+  ctx.moveTo(4, 8.5);
+  ctx.lineTo(3.2, 11);
+  ctx.lineTo(6.5, 8.5);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// --- image loading -------------------------------------------------------------
+
+const imgCache = new Map<string, Promise<HTMLImageElement | null>>();
+const directFailedHosts = new Set<string>();
+
+function raceTimeout(p: Promise<HTMLImageElement | null>, ms: number): Promise<HTMLImageElement | null> {
+  return Promise.race([p, new Promise<null>((r) => setTimeout(() => r(null), ms))]);
+}
+
+async function loadImage(url: string): Promise<HTMLImageElement | null> {
+  if (!url) return null;
+  let entry = imgCache.get(url);
+  if (!entry) {
+    entry = (async () => {
+      const img = (src: string, cors = false) =>
+        new Promise<HTMLImageElement | null>((resolve) => {
+          const el = new Image();
+          if (cors) el.crossOrigin = 'anonymous';
+          el.onload = () => resolve(el);
+          el.onerror = () => resolve(null);
+          el.src = src;
+        });
+      // try a CORS-clean direct load first (works where the CDN sends ACAO)
+      let host = '';
+      try {
+        host = new URL(url).host;
+      } catch {
+        return null;
+      }
+      if (!directFailedHosts.has(host)) {
+        const direct = await raceTimeout(img(url, true), 2500);
+        if (direct) return direct;
+        directFailedHosts.add(host); // host unreachable/blocked — stop paying the timeout
+      }
+      // fall back to our same-origin media proxy (never taints the canvas —
+      // the proxy always answers with Access-Control-Allow-Origin, so load
+      // it in CORS mode or the canvas gets tainted and export fails)
+      return raceTimeout(img(proxiedDownloadUrl(url, 'card-media'), true), 12000);
+    })();
+    imgCache.set(url, entry);
+  }
+  return entry;
+}
+
+// --- layout ---------------------------------------------------------------------
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const lines: string[] = [];
+  for (const para of text.split('\n')) {
+    if (para.trim() === '') {
+      lines.push('');
+      continue;
+    }
+    let cur = '';
+    for (let word of para.split(' ')) {
+      // hard-break tokens that alone exceed the line (long URLs, CJK runs)
+      while (ctx.measureText(word).width > maxWidth) {
+        if (cur) {
+          lines.push(cur);
+          cur = '';
+        }
+        let cut = word.length;
+        while (cut > 1 && ctx.measureText(word.slice(0, cut)).width > maxWidth) cut--;
+        lines.push(word.slice(0, cut));
+        word = word.slice(cut);
+      }
+      if (!word) continue;
+      const cand = cur ? `${cur} ${word}` : word;
+      if (ctx.measureText(cand).width <= maxWidth || !cur) cur = cand;
+      else {
+        lines.push(cur);
+        cur = word;
+      }
+    }
+    if (cur) lines.push(cur);
+  }
+  return lines;
+}
+
+function mediaLayout(count: number, cardW: number): { cols: number; rows: number; height: number; cellW: number; cellH: number; gap: number } {
+  const inner = cardW - PAD * 2;
+  if (count === 1) {
+    const h = Math.min(280, Math.max(130, inner * 0.52));
+    return { cols: 1, rows: 1, height: h, cellW: inner, cellH: h, gap: 0 };
+  }
+  const cols = 2;
+  const rows = count <= 2 ? 1 : 2;
+  const gap = 6;
+  const cellW = (inner - gap) / 2;
+  const cellH = count === 2 ? 150 : 132;
+  return { cols, rows, height: rows * cellH + (rows - 1) * gap, cellW, cellH, gap };
+}
+
+// --- main entry -------------------------------------------------------------------
+
+export async function renderTweetCard(canvas: HTMLCanvasElement, t: TweetData, theme: CardThemeName): Promise<void> {
+  const p = PALETTES[theme];
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas not supported in this browser.');
+
+  // gather images: try the 400x400 avatar first, fall back to the small one
+  const avatarUrl = t.user?.avatar ?? '';
+  const avatar = avatarUrl
+    ? (await loadImage(avatarUrl.replace(/_normal(\.\w+)$/, '_400x400$1'))) ??
+      (await loadImage(avatarUrl))
+    : null;
+  const mediaItems = t.media.slice(0, 4);
+  const mediaImgs = await Promise.all(mediaItems.map((m) => loadImage(m.url)));
+
+  // measure
+  ctx.font = `${TEXT_SIZE}px ${FAMILY}`;
+  const lines = t.text ? wrapText(ctx, t.text, W - PAD * 2) : [''];
+  const media = mediaLayout(mediaItems.length, W);
+  const hasMedia = mediaItems.length > 0;
+  const headH = Math.max(AVATAR, 24);
+  const textH = lines.length * LINE_H;
+  const H = PAD + headH + 14 + textH + (hasMedia ? 14 + media.height : 0) + 16 + 1 + 14 + 20 + PAD;
+
+  canvas.width = W * SCALE;
+  canvas.height = Math.round(H * SCALE);
+
+  ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  // card
+  rr(ctx, 0.5, 0.5, W - 1, H - 1, 20);
+  ctx.fillStyle = p.card;
+  ctx.fill();
+  ctx.strokeStyle = p.border;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.save();
+  rr(ctx, 0, 0, W, H, 20);
+  ctx.clip();
+
+  // header: avatar + name + handle
+  const avX = PAD;
+  const avY = PAD;
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(avX + AVATAR / 2, avY + AVATAR / 2, AVATAR / 2, 0, Math.PI * 2);
+  ctx.clip();
+  if (avatar) {
+    drawCover(ctx, avatar, avX, avY, AVATAR, AVATAR);
+  } else {
+    ctx.fillStyle = p.placeholder;
+    ctx.fillRect(avX, avY, AVATAR, AVATAR);
+    ctx.fillStyle = p.muted;
+    ctx.font = `600 20px ${FAMILY}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText((t.user?.name || '?').trim().charAt(0).toUpperCase(), avX + AVATAR / 2, avY + AVATAR / 2 + 1);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+  }
+  ctx.restore();
+
+  const nameX = avX + AVATAR + 12;
+  ctx.fillStyle = p.text;
+  ctx.font = `600 15px ${FAMILY}`;
+  ctx.fillText(t.user?.name || 'Unknown', nameX, avY + 18);
+  ctx.fillStyle = p.muted;
+  ctx.font = `400 14px ${FAMILY}`;
+  ctx.fillText('@' + (t.user?.screenName || 'unknown'), nameX, avY + 37);
+
+  // body text
+  let y = PAD + headH + 14 + TEXT_SIZE - 4;
+  ctx.fillStyle = p.text;
+  ctx.font = `${TEXT_SIZE}px ${FAMILY}`;
+  for (const line of lines) {
+    ctx.fillText(line, PAD, y);
+    y += LINE_H;
+  }
+
+  // media grid
+  if (hasMedia) {
+    const top = y - LINE_H + 14 + 6;
+    for (let i = 0; i < mediaItems.length; i++) {
+      const col = i % media.cols;
+      const row = Math.floor(i / media.cols);
+      const x = PAD + col * (media.cellW + media.gap);
+      const cy = top + row * (media.cellH + media.gap);
+      const img = mediaImgs[i];
+      ctx.save();
+      rr(ctx, x, cy, media.cellW, media.cellH, 14);
+      ctx.clip();
+      ctx.fillStyle = p.placeholder;
+      ctx.fillRect(x, cy, media.cellW, media.cellH);
+      if (img) drawCover(ctx, img, x, cy, media.cellW, media.cellH);
+      ctx.restore();
+      if (i === 0 && mediaItems[0].type !== 'photo') badge(ctx, x + 10, cy + 10, mediaItems[0], p);
+    }
+    y = top + media.height;
+  }
+
+  // divider
+  const footY = (hasMedia ? y : PAD + headH + 14 + textH) + 16;
+  ctx.strokeStyle = p.divider;
+  ctx.beginPath();
+  ctx.moveTo(PAD, footY + 0.5);
+  ctx.lineTo(W - PAD, footY + 0.5);
+  ctx.stroke();
+
+  // footer: date · engagement, watermark right
+  const baseY = footY + 24;
+  ctx.fillStyle = p.muted;
+  ctx.font = `400 13px ${FAMILY}`;
+  let fx = PAD;
+  const date = fmtDate(t.createdAt);
+  if (date) {
+    ctx.fillText(date, fx, baseY);
+    fx += ctx.measureText(date).width + 14;
+  }
+  ctx.lineWidth = 1.4;
+  if (t.likes != null) {
+    heart(ctx, fx + 5, baseY - 10, 13, p.muted);
+    const s = String(t.likes);
+    ctx.fillStyle = p.muted;
+    ctx.fillText(s, fx + 22, baseY);
+    fx += 22 + ctx.measureText(s).width + 14;
+  }
+  if (t.replies != null) {
+    bubble(ctx, fx + 5, baseY - 10, 13, p.muted);
+    const s = String(t.replies);
+    ctx.fillStyle = p.muted;
+    ctx.fillText(s, fx + 22, baseY);
+  }
+
+  const wmA = 'made with ';
+  const wmB = 'twittertools.com';
+  ctx.font = `600 13px ${FAMILY}`;
+  const bWidth = ctx.measureText(wmB).width;
+  const bX = W - PAD - bWidth;
+  ctx.fillStyle = BRAND;
+  ctx.fillText(wmB, bX, baseY);
+  ctx.font = `400 13px ${FAMILY}`;
+  ctx.fillStyle = p.muted;
+  ctx.fillText(wmA, bX - ctx.measureText(wmA).width, baseY);
+
+  ctx.restore();
+}
+
+function badge(ctx: CanvasRenderingContext2D, x: number, y: number, item: MediaItem, p: Palette) {
+  const label = item.type === 'animated_gif' ? 'GIF' : 'Video';
+  ctx.font = `600 12px ${FAMILY}`;
+  const w = ctx.measureText(label).width + 18;
+  rr(ctx, x, y, w, 22, 11);
+  ctx.fillStyle = p.badgeBg;
+  ctx.fill();
+  ctx.fillStyle = p.badgeText;
+  ctx.fillText(label, x + 9, y + 15);
+}
+
+/** Export the rendered card as a PNG download. Resolves false if the browser
+ * refuses (tainted canvas) — callers should surface that to the user. */
+export function downloadCard(canvas: HTMLCanvasElement, filename: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    try {
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          resolve(false);
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        resolve(true);
+      }, 'image/png');
+    } catch {
+      resolve(false);
+    }
+  });
+}

@@ -294,6 +294,8 @@ def normalize_tweet(d: dict) -> dict:
             "avatar": user.get("profile_image_url_https", ""),
         },
         "media": [normalize_media(m) for m in (d.get("mediaDetails") or [])],
+        "likes": d.get("favorite_count"),
+        "replies": d.get("conversation_count"),
         "replyToId": d.get("in_reply_to_status_id_str"),
         "quoted": normalize_tweet(d["quoted_tweet"]) if d.get("quoted_tweet") else None,
     }

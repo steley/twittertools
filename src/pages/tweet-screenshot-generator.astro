@@ -1,0 +1,218 @@
+---
+import Base from '../layouts/Base.astro';
+import ToolHero from '../components/ToolHero.astro';
+import Faq from '../components/Faq.astro';
+import AdSlot from '../components/AdSlot.astro';
+import { TOOLS } from '../lib/tools';
+
+const faq = [
+  {
+    q: 'How do I take a screenshot of a tweet?',
+    a: 'Paste the link to the post above and press Fetch. TwitterTools renders the post as a clean card — avatar, text, photos, date and engagement — and you download it as a PNG. No OS screenshot tool or cropping needed.',
+  },
+  {
+    q: 'Can I screenshot a tweet with images?',
+    a: 'Yes. Up to four photos from the post are drawn right into the card at their original aspect. For videos and GIFs the card shows the thumbnail frame with a badge — use the Video Downloader if you need the actual file.',
+  },
+  {
+    q: 'What size and quality is the export?',
+    a: 'The PNG exports at 2x resolution (about 1200px wide), so it stays crisp on retina displays and in presentations. Corners are transparent, so the card drops nicely onto any background.',
+  },
+  {
+    q: 'Does it need an X account or login?',
+    a: 'No. Like every tool on TwitterTools it only needs the public link to the post, and the card is rendered entirely in your browser — we never store what you generate.',
+  },
+  {
+    q: 'Which posts can be turned into a screenshot?',
+    a: 'Any public post. Protected (private) accounts and deleted posts can\'t be fetched, and age-restricted media may fail — the same limits as the rest of the toolkit.',
+  },
+];
+
+const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').slice(0, 3);
+---
+
+<Base
+  title="Tweet Screenshot Generator — Turn X Posts into Images | Free"
+  description="Turn any public X (Twitter) post into a polished screenshot card. Pick a light or dark theme and download it as a high-resolution PNG. Free, no sign-up, rendered in your browser."
+  path="/tweet-screenshot-generator"
+>
+  <ToolHero
+    title="X (Twitter) Screenshot Generator"
+    subtitle="Paste a link to any public post — get a clean, shareable card as a high-resolution PNG. Light and dark themes, free, no sign-up."
+  />
+
+  <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+    <form id="ss-form" class="flex flex-col gap-3 sm:flex-row">
+      <input
+        id="ss-url"
+        type="text"
+        inputmode="url"
+        class="w-full flex-1 rounded-xl border border-slate-300 px-4 py-3 font-mono text-sm focus:border-brand focus:outline-none"
+        placeholder="https://x.com/username/status/1234567890123456789"
+        autocomplete="off"
+        spellcheck="false"
+        required
+      />
+      <button
+        type="submit"
+        id="ss-btn"
+        class="rounded-xl bg-brand px-8 py-3 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
+      >
+        Fetch
+      </button>
+    </form>
+    <p class="mt-2 text-xs text-slate-400">
+      Works with x.com and twitter.com links. Only public posts can be processed.
+    </p>
+
+    <div id="ss-error" class="mt-4 hidden rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600"></div>
+    <div id="ss-tweet" class="mt-5"></div>
+
+    <div id="ss-controls" class="mt-5 hidden flex-wrap items-center gap-2">
+      <button id="ss-theme-light" class="ss-theme rounded-full px-4 py-2 text-sm font-medium" data-active="true">Light</button>
+      <button id="ss-theme-dark" class="ss-theme rounded-full px-4 py-2 text-sm font-medium" data-active="false">Dark</button>
+      <button
+        id="ss-download"
+        class="ml-auto rounded-full bg-brand px-6 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
+      >
+        Download PNG
+      </button>
+    </div>
+
+    <div class="mt-5 flex justify-center">
+      <canvas id="ss-canvas" class="hidden w-full max-w-[560px] rounded-[20px] shadow-sm ring-1 ring-slate-200"></canvas>
+    </div>
+  </section>
+
+  <AdSlot />
+
+  <section class="mt-12">
+    <h2 class="text-xl font-bold">How to screenshot a tweet</h2>
+    <ol class="mt-4 grid gap-4 sm:grid-cols-3">
+      <li class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="text-sm font-bold text-brand">Step 1</p>
+        <p class="mt-1 font-medium">Copy the post link</p>
+        <p class="mt-1 text-sm text-slate-600">
+          Tap the share icon under the post and choose "Copy link" — or copy the URL from your
+          browser's address bar.
+        </p>
+      </li>
+      <li class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="text-sm font-bold text-brand">Step 2</p>
+        <p class="mt-1 font-medium">Fetch the post</p>
+        <p class="mt-1 text-sm text-slate-600">
+          The post is rendered as a clean card with avatar, text, photos, date and engagement.
+        </p>
+      </li>
+      <li class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="text-sm font-bold text-brand">Step 3</p>
+        <p class="mt-1 font-medium">Pick a theme and download</p>
+        <p class="mt-1 text-sm text-slate-600">
+          Switch between light and dark, then download the PNG — corners are transparent, so it
+          fits anywhere.
+        </p>
+      </li>
+    </ol>
+  </section>
+
+  <Faq items={faq} />
+
+  <section class="mt-12">
+    <h2 class="text-xl font-bold">Related tools</h2>
+    <ul class="mt-4 grid gap-3 sm:grid-cols-3">
+      {
+        related.map((t) => (
+          <li>
+            <a href={t.slug} class="block rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium hover:border-brand">
+              {t.name} <span class="text-slate-400">→</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</Base>
+
+<script>
+  import type { TweetData } from '../lib/api';
+  import { el, renderTweetHeader, wireFetcher } from '../lib/media-page';
+  import { downloadCard, renderTweetCard, type CardThemeName } from '../lib/tweet-card';
+
+  const form = document.getElementById('ss-form') as HTMLFormElement;
+  const urlInput = document.getElementById('ss-url') as HTMLInputElement;
+  const btn = document.getElementById('ss-btn') as HTMLButtonElement;
+  const errorBox = document.getElementById('ss-error')!;
+  const tweetBox = document.getElementById('ss-tweet')!;
+  const controls = document.getElementById('ss-controls')!;
+  const canvas = document.getElementById('ss-canvas') as HTMLCanvasElement;
+  const dlBtn = document.getElementById('ss-download') as HTMLButtonElement;
+  const themeLight = document.getElementById('ss-theme-light') as HTMLButtonElement;
+  const themeDark = document.getElementById('ss-theme-dark') as HTMLButtonElement;
+
+  let tweet: TweetData | null = null;
+  let theme: CardThemeName = 'light';
+
+  function setTheme(name: CardThemeName) {
+    theme = name;
+    for (const [b, active] of [
+      [themeLight, name === 'light'],
+      [themeDark, name === 'dark'],
+    ] as const) {
+      b.dataset.active = String(active);
+      b.className =
+        'ss-theme rounded-full px-4 py-2 text-sm font-medium ' +
+        (active ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200');
+    }
+    if (tweet) draw();
+  }
+
+  async function draw() {
+    if (!tweet) return;
+    dlBtn.disabled = true;
+    dlBtn.textContent = 'Rendering…';
+    try {
+      await renderTweetCard(canvas, tweet, theme);
+      canvas.classList.remove('hidden');
+      controls.classList.remove('hidden');
+      controls.classList.add('flex');
+    } finally {
+      dlBtn.disabled = false;
+      dlBtn.textContent = 'Download PNG';
+    }
+  }
+
+  themeLight.addEventListener('click', () => setTheme('light'));
+  themeDark.addEventListener('click', () => setTheme('dark'));
+
+  dlBtn.addEventListener('click', async () => {
+    if (!tweet) return;
+    const ok = await downloadCard(canvas, `tweet-${tweet.id}-${theme}.png`);
+    const old = dlBtn.textContent;
+    dlBtn.textContent = ok ? '✓ Saved' : 'Export failed';
+    setTimeout(() => (dlBtn.textContent = old), 1500);
+    if (!ok) {
+      errorBox.textContent = 'The browser blocked the PNG export. Please reload the page and try again.';
+      errorBox.classList.remove('hidden');
+    }
+  });
+
+  wireFetcher({
+    form,
+    input: urlInput,
+    button: btn,
+    errorBox,
+    busyLabel: 'Fetching…',
+    render: (t) => {
+      tweet = t;
+      const card = el('div', 'rounded-xl border border-slate-200 p-4');
+      card.appendChild(renderTweetHeader(t));
+      if (t.text) {
+        const text = el('p', 'mt-3 line-clamp-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700');
+        text.textContent = t.text;
+        card.appendChild(text);
+      }
+      tweetBox.replaceChildren(card);
+      draw();
+    },
+  });
+</script>
