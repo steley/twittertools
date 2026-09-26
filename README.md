@@ -98,9 +98,13 @@ Verify `dist/` contains no dev references: `grep -r "127.0.0.1" dist/` should be
 Same pattern as the domain4sale project: static files + nginx + a systemd service.
 
 ```bash
-# 1. upload (site + server code)
-rsync -av --delete dist/ root@VPS_IP:/var/www/twittertools/dist/
-rsync -av --delete server/ deploy/ root@VPS_IP:/var/www/twittertools/
+# 1. upload (site + server code) — one rsync per directory: each --delete
+#    is scoped to its own destination dir and cannot touch the others
+#    (a combined `rsync --delete server/ deploy/ .../twittertools/` would
+#    MERGE both into the top level and delete dist/ — do not do that)
+rsync -av --delete dist/   root@VPS_IP:/var/www/twittertools/dist/
+rsync -av --delete server/ root@VPS_IP:/var/www/twittertools/server/
+rsync -av --delete deploy/ root@VPS_IP:/var/www/twittertools/deploy/
 
 # 2. on the VPS — API service
 cd /var/www/twittertools/server
