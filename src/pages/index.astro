@@ -1,0 +1,82 @@
+---
+import Base from '../layouts/Base.astro';
+import ToolCard from '../components/ToolCard.astro';
+import { CATEGORY_LABELS, toolsByCategory, type ToolCategory } from '../lib/tools';
+
+const order: ToolCategory[] = ['download', 'read', 'write', 'dev'];
+
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  name: 'TwitterTools — Free Tools for X (Twitter)',
+  description:
+    'Free browser-based tools for X (Twitter): download videos and images, unroll threads, count characters and build advanced searches. No sign-up required.',
+  url: 'https://twittertools.com',
+};
+---
+
+<Base
+  title="TwitterTools — Free Tools for X (Twitter)"
+  description="Free tools for X (Twitter): video & image downloader, thread reader, character counter and an advanced search builder. 100% free, no sign-up, works in your browser."
+  path="/"
+  jsonLd={[jsonLd]}
+>
+  <section class="py-8 text-center sm:py-14">
+    <p
+      class="mx-auto mb-4 inline-block rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-xs font-medium text-brand"
+    >
+      Free · No sign-up · Works in your browser
+    </p>
+    <h1 class="mx-auto max-w-3xl text-4xl font-bold tracking-tight sm:text-5xl">
+      Twitter<span class="text-brand">Tools</span> — the independent toolkit for
+      <span class="whitespace-nowrap">X (Twitter)</span>
+    </h1>
+    <p class="mx-auto mt-4 max-w-2xl text-lg text-slate-600">
+      Download videos, unroll threads, count characters and search X like a pro. Every tool runs
+      in your browser or on our lightweight API — no account, no tracking, no paywall.
+    </p>
+  </section>
+
+  {
+    order.map((category) => {
+      const tools = toolsByCategory(category);
+      const meta = CATEGORY_LABELS[category];
+      return (
+        <section class="mt-10">
+          <div class="mb-4 flex items-baseline justify-between gap-4">
+            <h2 class="text-xl font-bold">{meta.title}</h2>
+            <p class="hidden text-sm text-slate-500 sm:block">{meta.blurb}</p>
+          </div>
+          <div class="grid gap-4 sm:grid-cols-2">
+            {tools.map((tool) => (
+              <ToolCard tool={tool} />
+            ))}
+          </div>
+        </section>
+      );
+    })
+  }
+
+  <section class="mt-16 grid gap-4 rounded-2xl border border-slate-200 bg-white p-6 sm:grid-cols-3 sm:p-8">
+    <div>
+      <h3 class="font-semibold">100% free</h3>
+      <p class="mt-1 text-sm text-slate-600">
+        No accounts, no premium tiers on the core tools. Everything on this site works without
+        signing in.
+      </p>
+    </div>
+    <div>
+      <h3 class="font-semibold">Privacy-first</h3>
+      <p class="mt-1 text-sm text-slate-600">
+        Counting, parsing and searching happen entirely in your browser. We never see your text
+        unless you ask us to fetch a public post.
+      </p>
+    </div>
+    <div>
+      <h3 class="font-semibold">Built for X power users</h3>
+      <p class="mt-1 text-sm text-slate-600">
+        Independent and unaffiliated with X Corp. — just utilities that respect your time.
+      </p>
+    </div>
+  </section>
+</Base>

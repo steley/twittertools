@@ -1,0 +1,26 @@
+[Unit]
+Description=TwitterTools API (downloader backend)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Adjust paths after rsyncing the project to the VPS
+WorkingDirectory=/var/www/twittertools/server
+ExecStart=/var/www/twittertools/server/.venv/bin/python downloader_server.py
+Environment=PORT=8787
+Environment=BIND=127.0.0.1
+Restart=always
+RestartSec=3
+User=www-data
+Group=www-data
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=
+
+[Install]
+WantedBy=multi-user.target

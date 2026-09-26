@@ -1,0 +1,75 @@
+---
+import Base from '../layouts/Base.astro';
+
+const updated = 'September 26, 2026';
+---
+
+<Base
+  title="Privacy Policy | TwitterTools"
+  description="TwitterTools privacy policy: what we collect (almost nothing), what we never collect (your X credentials), and how the tools work without accounts."
+  path="/privacy"
+>
+  <div class="prose-none mx-auto max-w-3xl">
+    <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">Privacy Policy</h1>
+    <p class="mt-2 text-sm text-slate-500">Last updated: {updated}</p>
+
+    <div class="mt-8 space-y-8 text-slate-700">
+      <section>
+        <h2 class="text-xl font-bold">The short version</h2>
+        <p class="mt-2">
+          TwitterTools has no accounts, no sign-up and no login. The counting, parsing and search
+          building tools run entirely in your browser — your text never leaves your device. For
+          the downloader and thread reader we briefly fetch the public post you ask for. We never
+          ask for your X (Twitter) credentials and we never post on your behalf.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold">What we process</h2>
+        <ul class="mt-2 list-disc space-y-2 pl-5">
+          <li>
+            <strong>Post links you submit</strong> to the downloader or thread reader. These are
+            used to fetch the post from X's public embed endpoint and are cached for a few minutes
+            to keep things fast. The cache is not used to build profiles and expires automatically.
+          </li>
+          <li>
+            <strong>Server logs.</strong> Our web server keeps standard access logs (requested
+            URL, timestamp, user agent) for security and abuse prevention — for example to enforce
+            the download rate limit. Logs are rotated and not shared.
+          </li>
+          <li>
+            <strong>Everything else stays local.</strong> Character counting, URL/ID parsing and
+            search query building happen in your browser via JavaScript. Nothing is transmitted.
+          </li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold">Cookies & advertising</h2>
+        <p class="mt-2">
+          TwitterTools sets no cookies of its own. If advertising is enabled in the future, the ad
+          network (e.g. Google AdSense) may set its own cookies subject to its own policy; this
+          section will be updated before that happens.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold">Third-party content</h2>
+        <p class="mt-2">
+          When you download media, files stream directly from X's media servers
+          (pbs.twimg.com / video.twimg.com) through our proxy. We do not store media files. All
+          content belongs to its original authors.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold">Your rights & contact</h2>
+        <p class="mt-2">
+          Since we don't collect personal data or accounts, there is usually nothing to export or
+          delete. If you have questions or a privacy request, contact
+          <span class="font-mono text-sm">contact@twittertools.com</span>.
+        </p>
+      </section>
+    </div>
+  </div>
+</Base>

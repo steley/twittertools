@@ -1,0 +1,402 @@
+---
+import Base from '../layouts/Base.astro';
+import ToolHero from '../components/ToolHero.astro';
+import Faq from '../components/Faq.astro';
+import AdSlot from '../components/AdSlot.astro';
+import { TOOLS } from '../lib/tools';
+
+const faq = [
+  {
+    q: 'How does the thread reader work?',
+    a: 'Paste a link to any post in a thread and TwitterTools follows the reply chain upwards to collect every post, then shows the whole thread on one clean page. When the free embed endpoint can\'t provide the chain, switch to Paste mode and drop the text in yourself — all reading and export features still work.',
+  },
+  {
+    q: 'Can I export a thread as Markdown?',
+    a: 'Yes — one click gives you a .md file with every post numbered, ready for Notion, Obsidian, GitHub or any static-site generator. TXT and standalone HTML exports are there too.',
+  },
+  {
+    q: 'Do I need to log in to X?',
+    a: 'Never. The reader only fetches public posts through X\'s embed endpoint. No OAuth, no cookies, no account access of any kind.',
+  },
+  {
+    q: 'Why can\'t some threads be unrolled?',
+    a: 'Deleted posts, protected accounts and occasional restrictions on X\'s embed endpoint can break the chain. The tool tells you when a thread is only partially available and offers the paste mode as a reliable fallback.',
+  },
+  {
+    q: 'Is this like Thread Reader App?',
+    a: 'It\'s the same idea — unroll, read, export — but independent, free, and combined with the rest of the TwitterTools toolkit. No account required and no storage of what you unroll.',
+  },
+];
+
+const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0, 3);
+---
+
+<Base
+  title="X (Twitter) Thread Reader — Unroll & Export to Markdown | Free"
+  description="Unroll any public X (Twitter) thread into one readable page. Copy the whole thread or export it as Markdown, TXT or HTML. Free, no login required."
+  path="/twitter-thread-reader"
+>
+  <ToolHero
+    title="X (Twitter) Thread Reader"
+    subtitle="Unroll a thread into one clean page — then copy it or export to Markdown, TXT or HTML. Free, no X login required."
+  />
+
+  <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+    <div class="flex gap-2" role="tablist" aria-label="Thread input mode">
+      <button id="tr-tab-url" class="tr-tab rounded-full px-4 py-2 text-sm font-medium" data-active="true" aria-selected="true" role="tab">
+        From post URL
+      </button>
+      <button id="tr-tab-paste" class="tr-tab rounded-full px-4 py-2 text-sm font-medium" data-active="false" aria-selected="false" role="tab">
+        Paste text
+      </button>
+    </div>
+
+    <div id="tr-panel-url" class="mt-5">
+      <form id="tr-form" class="flex flex-col gap-3 sm:flex-row">
+        <input
+          id="tr-url"
+          type="text"
+          inputmode="url"
+          class="w-full flex-1 rounded-xl border border-slate-300 px-4 py-3 font-mono text-sm focus:border-brand focus:outline-none"
+          placeholder="https://x.com/username/status/1234567890123456789"
+          autocomplete="off"
+          spellcheck="false"
+        />
+        <button
+          type="submit"
+          id="tr-btn"
+          class="rounded-xl bg-brand px-8 py-3 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
+        >
+          Unroll
+        </button>
+      </form>
+      <p class="mt-2 text-xs text-slate-400">
+        Best-effort via X's free embed endpoint. If a thread can't be unrolled, use the Paste mode.
+      </p>
+    </div>
+
+    <div id="tr-panel-paste" class="mt-5 hidden">
+      <label for="tr-text" class="mb-2 block text-sm font-medium text-slate-700">
+        Thread text — separate posts with <code class="rounded bg-slate-100 px-1">---</code> on its own line (or lines like <code class="rounded bg-slate-100 px-1">1/</code>)
+      </label>
+      <textarea
+        id="tr-text"
+        rows="8"
+        class="w-full rounded-xl border border-slate-300 p-4 font-mono text-sm leading-relaxed focus:border-brand focus:outline-none"
+        placeholder={'First post of my thread...\n---\nSecond post, more detail...\n---\nWrapping up!'}
+      ></textarea>
+      <button
+        id="tr-parse"
+        class="mt-3 rounded-xl bg-brand px-8 py-3 text-sm font-semibold text-white transition hover:bg-brand-dark"
+      >
+        Read thread
+      </button>
+    </div>
+
+    <div id="tr-error" class="mt-4 hidden rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600"></div>
+    <div id="tr-partial" class="mt-4 hidden rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700"></div>
+
+    <div id="tr-actions" class="mt-5 hidden flex-wrap items-center gap-2">
+      <button data-tr-export="copy" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Copy all</button>
+      <button data-tr-export="md" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Copy Markdown</button>
+      <button data-tr-export="txt" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Export TXT</button>
+      <button data-tr-export="mdfile" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Export .md</button>
+      <button data-tr-export="html" class="tr-exp rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white hover:bg-brand-dark">Export HTML</button>
+    </div>
+
+    <div id="tr-tweets" class="mt-6 space-y-4"></div>
+  </section>
+
+  <AdSlot />
+
+  <section class="mt-12">
+    <h2 class="text-xl font-bold">Read, save and repurpose X threads</h2>
+    <div class="mt-4 grid gap-4 sm:grid-cols-3">
+      <div class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="font-semibold">One clean page</p>
+        <p class="mt-1 text-sm text-slate-600">
+          Threads are written post by post, 1/ 2/ 3/… The reader stitches them back together so
+          you can actually read them.
+        </p>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="font-semibold">Export anywhere</p>
+        <p class="mt-1 text-sm text-slate-600">
+          Markdown for Notion and Obsidian, TXT for anything, or a standalone HTML file that
+          keeps the formatting.
+        </p>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="font-semibold">Nothing stored</p>
+        <p class="mt-1 text-sm text-slate-600">
+          Unrolled threads pass through our lightweight API and are cached for minutes, never
+          archived. There's no account to tie them to.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <Faq items={faq} />
+
+  <section class="mt-12">
+    <h2 class="text-xl font-bold">Related tools</h2>
+    <ul class="mt-4 grid gap-3 sm:grid-cols-3">
+      {
+        related.map((t) => (
+          <li>
+            <a href={t.slug} class="block rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium hover:border-brand">
+              {t.name} <span class="text-slate-400">→</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</Base>
+
+<script>
+  import { extractTweetId, fetchThread, type TweetData } from '../lib/api';
+
+  const tabUrl = document.getElementById('tr-tab-url') as HTMLButtonElement;
+  const tabPaste = document.getElementById('tr-tab-paste') as HTMLButtonElement;
+  const panelUrl = document.getElementById('tr-panel-url')!;
+  const panelPaste = document.getElementById('tr-panel-paste')!;
+  const form = document.getElementById('tr-form') as HTMLFormElement;
+  const urlInput = document.getElementById('tr-url') as HTMLInputElement;
+  const btn = document.getElementById('tr-btn') as HTMLButtonElement;
+  const pasteBtn = document.getElementById('tr-parse') as HTMLButtonElement;
+  const textarea = document.getElementById('tr-text') as HTMLTextAreaElement;
+  const errorBox = document.getElementById('tr-error')!;
+  const partialBox = document.getElementById('tr-partial')!;
+  const actions = document.getElementById('tr-actions')!;
+  const tweetsEl = document.getElementById('tr-tweets')!;
+
+  interface SimpleTweet {
+    text: string;
+    author?: string;
+    handle?: string;
+    date?: string;
+    images?: string[];
+  }
+
+  let thread: SimpleTweet[] = [];
+  let threadTitle = '';
+
+  // --- mode switching -------------------------------------------------------
+  function setMode(mode: 'url' | 'paste') {
+    for (const [tab, active] of [
+      [tabUrl, mode === 'url'],
+      [tabPaste, mode === 'paste'],
+    ] as const) {
+      tab.dataset.active = String(active);
+      tab.setAttribute('aria-selected', String(active));
+      tab.className =
+        'tr-tab rounded-full px-4 py-2 text-sm font-medium ' +
+        (active ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200');
+    }
+    panelUrl.classList.toggle('hidden', mode !== 'url');
+    panelPaste.classList.toggle('hidden', mode !== 'paste');
+  }
+  tabUrl.addEventListener('click', () => setMode('url'));
+  tabPaste.addEventListener('click', () => setMode('paste'));
+  setMode('url');
+
+  // --- rendering -------------------------------------------------------------
+  const el = (tag: string, cls?: string): HTMLElement => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    return n;
+  };
+
+  function render() {
+    tweetsEl.replaceChildren();
+    if (!thread.length) {
+      actions.classList.add('hidden');
+      actions.classList.remove('flex');
+      return;
+    }
+    actions.classList.remove('hidden');
+    actions.classList.add('flex');
+
+    thread.forEach((t, i) => {
+      const card = el('article', 'rounded-xl border border-slate-200 p-4');
+      const head = el('div', 'flex items-baseline gap-2');
+      const num = el('span', 'text-sm font-bold text-brand');
+      num.textContent = `${i + 1}/${thread.length}`;
+      head.appendChild(num);
+      if (t.handle) {
+        const who = el('span', 'text-xs text-slate-400');
+        who.textContent = t.author ? `${t.author} (@${t.handle})` : `@${t.handle}`;
+        head.appendChild(who);
+      }
+      if (t.date) {
+        const when = el('span', 'ml-auto text-xs text-slate-400');
+        when.textContent = t.date;
+        head.appendChild(when);
+      }
+      card.appendChild(head);
+
+      const body = el('p', 'mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700');
+      body.textContent = t.text;
+      card.appendChild(body);
+
+      if (t.images?.length) {
+        const imgs = el('div', 'mt-3 grid grid-cols-2 gap-2');
+        for (const src of t.images) {
+          const img = document.createElement('img');
+          img.src = src;
+          img.alt = 'Thread media';
+          img.loading = 'lazy';
+          img.className = 'max-h-56 w-full rounded-lg bg-slate-100 object-contain';
+          img.referrerPolicy = 'no-referrer';
+          imgs.appendChild(img);
+        }
+        card.appendChild(imgs);
+      }
+      tweetsEl.appendChild(card);
+    });
+  }
+
+  // --- data sources -----------------------------------------------------------
+  function showError(msg: string) {
+    errorBox.textContent = msg;
+    errorBox.classList.remove('hidden');
+  }
+  function hideMessages() {
+    errorBox.classList.add('hidden');
+    partialBox.classList.add('hidden');
+  }
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    hideMessages();
+    const id = extractTweetId(urlInput.value);
+    if (!id) {
+      showError("That doesn't look like a post link. Paste something like https://x.com/user/status/123…");
+      return;
+    }
+    btn.disabled = true;
+    btn.textContent = 'Unrolling…';
+    try {
+      const data = await fetchThread(id);
+      thread = data.tweets.map((t: TweetData) => ({
+        text: t.text,
+        author: t.user?.name,
+        handle: t.user?.screenName,
+        date: t.createdAt?.slice(0, 10),
+        images: t.media.filter((m) => m.type === 'photo').map((m) => m.url),
+      }));
+      const first = data.tweets[0];
+      threadTitle = first?.user?.screenName
+        ? `Thread by ${first.user.name} (@${first.user.screenName})`
+        : 'Thread';
+      render();
+      if (data.partial && data.tweets.length <= 1) {
+        partialBox.textContent =
+          "Couldn't follow the reply chain for this post (X's embed endpoint doesn't expose it). Copy the thread text and use the Paste mode instead — all exports still work.";
+        partialBox.classList.remove('hidden');
+      } else if (data.partial) {
+        partialBox.textContent = 'Partially unrolled: some posts in the chain were unavailable (deleted or protected).';
+        partialBox.classList.remove('hidden');
+      }
+    } catch (err) {
+      showError(
+        (err instanceof Error ? err.message : 'Fetching failed.') +
+          ' You can switch to the Paste mode to read and export the thread.'
+      );
+      thread = [];
+      render();
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Unroll';
+    }
+  });
+
+  function parsePasted(): SimpleTweet[] {
+    const raw = textarea.value.trim();
+    if (!raw) return [];
+    let parts: string[];
+    if (/^---\s*$/m.test(raw)) {
+      parts = raw.split(/^---\s*$/m);
+    } else if (/^\d+\/\s*$/m.test(raw)) {
+      parts = raw.split(/^\d+\/\s*$/m);
+    } else {
+      parts = [raw];
+    }
+    return parts
+      .map((p) => p.trim())
+      .filter(Boolean)
+      .map((p) => ({ text: p }));
+  }
+
+  pasteBtn.addEventListener('click', () => {
+    hideMessages();
+    thread = parsePasted();
+    threadTitle = 'Thread';
+    render();
+    if (!thread.length) showError('Paste the thread text first (separate posts with --- lines).');
+  });
+
+  // --- exports ------------------------------------------------------------------
+  function plainText(): string {
+    return thread.map((t) => t.text).join('\n\n---\n\n');
+  }
+  function markdown(): string {
+    const n = thread.length;
+    const head = `# ${threadTitle}\n\n> Unrolled with TwitterTools — twittertools.com\n`;
+    return head + '\n' + thread.map((t, i) => `**${i + 1}/${n}**\n\n${t.text}`).join('\n\n---\n\n') + '\n';
+  }
+  function htmlDoc(): string {
+    const esc = (s: string) =>
+      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const items = thread
+      .map((t, i) => {
+        const who = t.handle ? `<span class="who">${esc(t.author ?? '')} (@${esc(t.handle)})</span>` : '';
+        const imgs = (t.images ?? [])
+          .map((src) => `<img src="${esc(src)}" alt="" referrerpolicy="no-referrer" loading="lazy">`)
+          .join('');
+        return `<article><h2>${i + 1}/${thread.length} ${who}</h2><p>${esc(t.text).replace(/\n/g, '<br>')}</p>${imgs}</article>`;
+      })
+      .join('\n');
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(threadTitle)}</title><style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem;color:#0f1419}article{border:1px solid #e2e8f0;border-radius:12px;padding:1rem;margin-bottom:1rem}h2{font-size:.9rem;margin:0 0 .5rem}h2 .who{font-weight:400;color:#64748b;margin-left:.5rem}p{line-height:1.6;white-space:pre-wrap;margin:0}img{max-width:100%;border-radius:8px;margin-top:.5rem}footer{color:#94a3b8;font-size:.8rem;margin-top:2rem}</style></head><body><h1>${esc(threadTitle)}</h1>${items}<footer>Unrolled with <a href="https://twittertools.com">TwitterTools</a></footer></body></html>`;
+  }
+
+  function download(filename: string, content: string, type: string) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  document.querySelectorAll<HTMLButtonElement>('.tr-exp').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      if (!thread.length) return;
+      const stamp = new Date().toISOString().slice(0, 10);
+      switch (btn.dataset.trExport) {
+        case 'copy':
+          await navigator.clipboard.writeText(plainText());
+          break;
+        case 'md':
+          await navigator.clipboard.writeText(markdown());
+          break;
+        case 'txt':
+          download(`thread-${stamp}.txt`, plainText(), 'text/plain');
+          break;
+        case 'mdfile':
+          download(`thread-${stamp}.md`, markdown(), 'text/markdown');
+          break;
+        case 'html':
+          download(`thread-${stamp}.html`, htmlDoc(), 'text/html');
+          break;
+      }
+      const old = btn.textContent;
+      btn.textContent = '✓ Done';
+      setTimeout(() => (btn.textContent = old), 1200);
+    });
+  });
+</script>

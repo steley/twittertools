@@ -1,0 +1,77 @@
+---
+import Base from '../layouts/Base.astro';
+
+const updated = 'September 26, 2026';
+---
+
+<Base
+  title="Terms of Service & DMCA | TwitterTools"
+  description="TwitterTools terms of service: acceptable use of the free X (Twitter) tools, intellectual property policy and DMCA takedown procedure."
+  path="/terms"
+>
+  <div class="mx-auto max-w-3xl">
+    <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">Terms of Service & DMCA</h1>
+    <p class="mt-2 text-sm text-slate-500">Last updated: {updated}</p>
+
+    <div class="mt-8 space-y-8 text-slate-700">
+      <section>
+        <h2 class="text-xl font-bold">1. What TwitterTools is</h2>
+        <p class="mt-2">
+          TwitterTools is a collection of free, independent utilities for X (Twitter) content:
+          downloaders, a thread reader, a character counter, a URL/ID parser and a search query
+          builder. The service is provided "as is", without warranties of any kind.
+        </p>
+        <p class="mt-2">
+          TwitterTools is <strong>not affiliated with, endorsed by, or sponsored by X Corp.</strong>
+          "X", "Twitter" and related marks are trademarks of X Corp. and are used here only in a
+          descriptive manner.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold">2. Acceptable use</h2>
+        <ul class="mt-2 list-disc space-y-2 pl-5">
+          <li>Only use the tools on public posts that you have the right to view and save.</li>
+          <li>Don't use the service to infringe copyright, violate privacy, or break applicable law.</li>
+          <li>Don't attempt to overload, scrape or automate abuse of the site or its API (rate limits are enforced).</li>
+          <li>Respect the rights of content authors: media is served directly from X's CDN and nothing is archived here.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold">3. No guarantee of availability</h2>
+        <p class="mt-2">
+          The downloader and thread reader rely on X's free, undocumented embed endpoint, which
+          may change or stop working at any time without notice. We work around breakages when we
+          can, but availability of data-dependent tools cannot be guaranteed.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold">4. DMCA / takedown policy</h2>
+        <p class="mt-2">
+          TwitterTools does not host user content. Media files are streamed from X's own servers
+          at the moment you request them, and post data comes from X's public embed endpoint.
+          TwitterTools does not archive, index or redistribute content.
+        </p>
+        <p class="mt-2">
+          If you believe material accessible through this site infringes your copyright, send a
+          notice to <span class="font-mono text-sm">dmca@twittertools.com</span> including:
+          (a) identification of the copyrighted work, (b) the URL(s) of the post(s) involved,
+          (c) your contact information, (d) a statement of good-faith belief, and (e) a statement,
+          under penalty of perjury, that the information is accurate and you are the rights holder
+          or authorized to act for them. Valid requests will be answered promptly; where the
+          content lives on X's infrastructure, we additionally recommend filing a takedown with X Corp.
+        </p>
+      </section>
+
+      <section>
+        <h2 class="text-xl font-bold">5. Changes</h2>
+        <p class="mt-2">
+          These terms may be updated as the toolkit grows; the "last updated" date above always
+          reflects the current version. Questions: <span class="font-mono text-sm">contact@twittertools.com</span>.
+        </p>
+      </section>
+    </div>
+  </div>
+</Base>

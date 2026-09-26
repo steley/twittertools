@@ -1,0 +1,18 @@
+---
+/**
+ * Reserved advertising space. To monetize: replace the placeholder markup with
+ * your Google AdSense <ins> snippet (or any other ad network) once approved.
+ */
+interface Props {
+  label?: string;
+}
+const { label = 'Advertisement' } = Astro.props;
+---
+
+<!-- Ad slot: paste your ad network snippet here (e.g. AdSense <ins class="adsbygoogle">) -->
+<aside
+  class="my-10 rounded-2xl border border-dashed border-slate-300 bg-white/60 px-4 py-8 text-center text-xs font-medium uppercase tracking-widest text-slate-400"
+  aria-label={label}
+>
+  {label}
+</aside>

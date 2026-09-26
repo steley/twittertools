@@ -1,0 +1,223 @@
+---
+import Base from '../layouts/Base.astro';
+import ToolHero from '../components/ToolHero.astro';
+import Faq from '../components/Faq.astro';
+import AdSlot from '../components/AdSlot.astro';
+import { TOOLS } from '../lib/tools';
+
+const faq = [
+  {
+    q: 'How do I download a video from X (Twitter)?',
+    a: 'Copy the link to the post that contains the video (for example https://x.com/user/status/123…), paste it above and press Fetch. You\'ll get a list of available quality levels — pick one and the MP4 downloads straight from X\'s servers.',
+  },
+  {
+    q: 'Can I download GIFs too?',
+    a: 'Yes. GIFs on X are actually short muted MP4 videos, so the downloader saves them as an MP4 file that plays everywhere.',
+  },
+  {
+    q: 'Does it work on iPhone and Android?',
+    a: 'Yes — the site works in any modern mobile browser. On iOS, downloads land in your Files app; on Android, in your Downloads folder.',
+  },
+  {
+    q: 'Do I need an X account or app?',
+    a: 'No. The tool only needs the public link to a post. No login, no app install, and we never ask for your X credentials.',
+  },
+  {
+    q: 'The post fails to load — why?',
+    a: 'The tool can only fetch public posts. Posts from protected (private) accounts, deleted posts and age-restricted media can\'t be processed. Occasional failures also happen when X\'s embed endpoint is having a bad day — just retry.',
+  },
+];
+
+const related = TOOLS.filter((t) => t.slug !== '/twitter-video-downloader').slice(0, 3);
+---
+
+<Base
+  title="X (Twitter) Video Downloader — Save Videos & GIFs as MP4 | Free"
+  description="Download videos and GIFs from X (Twitter) posts for free. Paste a post link and save the MP4 in the quality you need. No app, no sign-up, works on mobile and desktop."
+  path="/twitter-video-downloader"
+>
+  <ToolHero
+    title="X (Twitter) Video Downloader"
+    subtitle="Paste a link to any public post — download its video or GIF as MP4 in the available qualities. Free and without sign-up."
+  />
+
+  <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+    <form id="vd-form" class="flex flex-col gap-3 sm:flex-row">
+      <input
+        id="vd-url"
+        type="text"
+        inputmode="url"
+        class="w-full flex-1 rounded-xl border border-slate-300 px-4 py-3 font-mono text-sm focus:border-brand focus:outline-none"
+        placeholder="https://x.com/username/status/1234567890123456789"
+        autocomplete="off"
+        spellcheck="false"
+        required
+      />
+      <button
+        type="submit"
+        id="vd-btn"
+        class="rounded-xl bg-brand px-8 py-3 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
+      >
+        Fetch
+      </button>
+    </form>
+    <p class="mt-2 text-xs text-slate-400">
+      Works with x.com and twitter.com links. Only public posts can be processed.
+    </p>
+
+    <div id="vd-error" class="mt-4 hidden rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600"></div>
+    <div id="vd-result" class="mt-5"></div>
+  </section>
+
+  <AdSlot />
+
+  <section class="mt-12">
+    <h2 class="text-xl font-bold">How to download a video from X</h2>
+    <ol class="mt-4 grid gap-4 sm:grid-cols-3">
+      <li class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="text-sm font-bold text-brand">Step 1</p>
+        <p class="mt-1 font-medium">Copy the post link</p>
+        <p class="mt-1 text-sm text-slate-600">
+          Tap the share icon under the post and choose "Copy link" — or copy the URL from your
+          browser's address bar.
+        </p>
+      </li>
+      <li class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="text-sm font-bold text-brand">Step 2</p>
+        <p class="mt-1 font-medium">Paste it above and hit Fetch</p>
+        <p class="mt-1 text-sm text-slate-600">
+          We look up the post and list every available video quality, including GIFs saved as MP4.
+        </p>
+      </li>
+      <li class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="text-sm font-bold text-brand">Step 3</p>
+        <p class="mt-1 font-medium">Pick a quality and download</p>
+        <p class="mt-1 text-sm text-slate-600">
+          The file streams directly from X's media servers to your device. Nothing is stored on
+          our side.
+        </p>
+      </li>
+    </ol>
+  </section>
+
+  <Faq items={faq} />
+
+  <section class="mt-12">
+    <h2 class="text-xl font-bold">Related tools</h2>
+    <ul class="mt-4 grid gap-3 sm:grid-cols-3">
+      {
+        related.map((t) => (
+          <li>
+            <a href={t.slug} class="block rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium hover:border-brand">
+              {t.name} <span class="text-slate-400">→</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</Base>
+
+<script>
+  import { proxiedDownloadUrl, type MediaItem, type TweetData } from '../lib/api';
+  import { el, renderTweetHeader, wireFetcher } from '../lib/media-page';
+
+  const form = document.getElementById('vd-form') as HTMLFormElement;
+  const urlInput = document.getElementById('vd-url') as HTMLInputElement;
+  const btn = document.getElementById('vd-btn') as HTMLButtonElement;
+  const errorBox = document.getElementById('vd-error')!;
+  const result = document.getElementById('vd-result')!;
+
+  const qualityLabel = (bitrate: number | null): string => {
+    if (bitrate == null) return 'Auto';
+    if (bitrate >= 2_550_000) return '~1080p';
+    if (bitrate >= 2_000_000) return '~720p';
+    if (bitrate >= 800_000) return '~480p';
+    return '~320p';
+  };
+
+  function mediaCard(item: MediaItem): HTMLElement {
+    const card = el('div', 'rounded-xl border border-slate-200 overflow-hidden');
+    const thumbWrap = el('div', 'relative bg-slate-100');
+    const img = document.createElement('img');
+    img.src = item.url;
+    img.alt = 'Post media preview';
+    img.loading = 'lazy';
+    img.className = 'max-h-80 w-full object-contain';
+    img.referrerPolicy = 'no-referrer';
+    thumbWrap.appendChild(img);
+    const badge = el(
+      'span',
+      'absolute left-3 top-3 rounded-full bg-black/70 px-2.5 py-1 text-xs font-medium text-white'
+    );
+    badge.textContent = item.type === 'animated_gif' ? 'GIF (MP4)' : 'Video';
+    thumbWrap.appendChild(badge);
+    card.appendChild(thumbWrap);
+
+    const rows = el('div', 'divide-y divide-slate-100');
+    const mp4s = (item.variants ?? []).filter((v) => v.contentType === 'video/mp4' && !v.url.endsWith('.m3u8'));
+    if (!mp4s.length) {
+      const row = el('p', 'px-4 py-3 text-sm text-slate-500');
+      row.textContent = 'No downloadable video variant found for this media.';
+      rows.appendChild(row);
+    }
+    for (const v of mp4s) {
+      const row = el('div', 'flex items-center gap-3 px-4 py-3');
+      const meta = el('div', 'flex-1');
+      const q = el('p', 'text-sm font-semibold');
+      q.textContent = qualityLabel(v.bitrate);
+      const sub = el('p', 'text-xs text-slate-400');
+      sub.textContent = v.bitrate ? `${Math.round(v.bitrate / 1000)} kbps · MP4` : 'MP4';
+      meta.appendChild(q);
+      meta.appendChild(sub);
+      row.appendChild(meta);
+      const dl = document.createElement('a');
+      dl.href = proxiedDownloadUrl(v.url, `twittertools-${Date.now()}-${qualityLabel(v.bitrate).replace('~', '')}.mp4`);
+      dl.download = '';
+      dl.className = 'rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white hover:bg-brand-dark';
+      dl.textContent = 'Download';
+      row.appendChild(dl);
+      rows.appendChild(row);
+    }
+    card.appendChild(rows);
+    return card;
+  }
+
+  function renderTweet(t: TweetData) {
+    result.replaceChildren();
+
+    const box = el('div', 'rounded-xl border border-slate-200 p-4');
+    box.appendChild(renderTweetHeader(t));
+    const text = el('p', 'mt-3 whitespace-pre-wrap text-sm leading-relaxed text-slate-700');
+    text.textContent = t.text;
+    box.appendChild(text);
+    result.appendChild(box);
+
+    const videos = t.media.filter((m) => m.type === 'video' || m.type === 'animated_gif');
+    const photos = t.media.filter((m) => m.type === 'photo');
+
+    if (videos.length) {
+      const wrap = el('div', 'mt-4 space-y-4');
+      for (const v of videos) wrap.appendChild(mediaCard(v));
+      result.appendChild(wrap);
+    }
+
+    if (photos.length && !videos.length) {
+      const note = el(
+        'p',
+        'mt-4 rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-700'
+      );
+      note.innerHTML =
+        'This post contains photos but no video. Use the <a class="font-semibold underline" href="/twitter-image-downloader">Image Downloader</a> for those.';
+      result.appendChild(note);
+    }
+
+    if (!t.media.length) {
+      const note = el('p', 'mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700');
+      note.textContent = 'This post has no video, GIF or photo attached.';
+      result.appendChild(note);
+    }
+  }
+
+  wireFetcher({ form, input: urlInput, button: btn, errorBox, busyLabel: 'Fetching…', render: renderTweet });
+</script>

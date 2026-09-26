@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand: #1d9bf0;
+  --color-brand-dark: #1a8cd8;
+  --color-ink: #0f1419;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+/* Tighter focus ring consistent with the brand */
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}

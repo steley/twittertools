@@ -1,0 +1,307 @@
+---
+import Base from '../layouts/Base.astro';
+import ToolHero from '../components/ToolHero.astro';
+import Faq from '../components/Faq.astro';
+import AdSlot from '../components/AdSlot.astro';
+import { TOOLS } from '../lib/tools';
+
+const operators = [
+  ['"exact phrase"', 'Search for the exact phrase', '"cloudflare workers"'],
+  ['from:user', 'Posts sent by an account', 'from:openai'],
+  ['to:user', 'Replies sent to an account', 'to:openai'],
+  ['@user', 'Posts mentioning an account', '@openai'],
+  ['since:2024-01-01', 'Posted on or after a date', 'ai since:2024-01-01'],
+  ['until:2024-12-31', 'Posted before a date', 'ai until:2024-12-31'],
+  ['min_replies:100', 'At least N replies', 'startup min_replies:100'],
+  ['min_faves:1000', 'At least N likes', 'design min_faves:1000'],
+  ['min_retweets:100', 'At least N reposts', 'launch min_retweets:100'],
+  ['filter:links', 'Only posts containing links', 'docs filter:links'],
+  ['-filter:links', 'Exclude posts with links', 'help -filter:links'],
+  ['filter:media', 'Only posts with photo or video', 'demo filter:media'],
+  ['filter:native_video', 'Only posts with video', 'trailer filter:native_video'],
+  ['filter:images', 'Only posts with images', 'wallpaper filter:images'],
+  ['?', 'Only posts that end with a question', 'recommend ?'],
+  ['lang:en', 'Posts in a specific language', 'rust lang:en'],
+  ['(a OR b)', 'Match either word', '(rust OR go) lang:en'],
+  ['-word', 'Exclude a word', 'python -snake'],
+];
+
+const faq = [
+  {
+    q: 'What are X (Twitter) search operators?',
+    a: "Operators are keywords like from:, min_faves: and since: that X's search box understands. They let you filter posts by author, date, popularity, language and more — but you have to type them by hand. This builder writes them for you.",
+  },
+  {
+    q: 'Does advanced search require a Premium subscription?',
+    a: 'No. Typing operators directly into the X search box works on a free account. (Some date-range and engagement filters in X\'s own UI require Premium, but the raw operators keep working from the search box.)',
+  },
+  {
+    q: 'Where does my search open?',
+    a: 'In a new tab on x.com with your query pre-filled, using X\'s own results. TwitterTools never sees your search and nothing is logged.',
+  },
+  {
+    q: 'Can I combine as many filters as I want?',
+    a: 'Yes — the builder simply concatenates every operator you set. X accepts long combined queries like from:openai ai min_faves:100 lang:en -filter:links.',
+  },
+];
+
+const related = TOOLS.filter((t) => t.slug !== '/twitter-advanced-search-builder').slice(0, 3);
+---
+
+<Base
+  title="X (Twitter) Advanced Search Builder — Free Query Generator"
+  description="Build advanced X (Twitter) searches with a simple form: filter by user, date, likes, language and more. Generates search operators like from:, min_faves: and since: automatically."
+  path="/twitter-advanced-search-builder"
+>
+  <ToolHero
+    title="X Advanced Search Builder"
+    subtitle="Fill in what you're looking for — get a ready-to-paste search query with all the operators, and open it on X in one click."
+  />
+
+  <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+    <div class="grid gap-5 sm:grid-cols-2">
+      <div>
+        <label for="s-all" class="mb-1 block text-sm font-medium text-slate-700">All of these words</label>
+        <input id="s-all" type="text" placeholder="cloudflare workers" class="sb-input" />
+      </div>
+      <div>
+        <label for="s-exact" class="mb-1 block text-sm font-medium text-slate-700">Exact phrase</label>
+        <input id="s-exact" type="text" placeholder="edge computing" class="sb-input" />
+      </div>
+      <div>
+        <label for="s-any" class="mb-1 block text-sm font-medium text-slate-700">Any of these words (OR)</label>
+        <input id="s-any" type="text" placeholder="rust go zig" class="sb-input" />
+      </div>
+      <div>
+        <label for="s-none" class="mb-1 block text-sm font-medium text-slate-700">None of these words</label>
+        <input id="s-none" type="text" placeholder="crypto giveaway" class="sb-input" />
+      </div>
+      <div>
+        <label for="s-hashtag" class="mb-1 block text-sm font-medium text-slate-700">These hashtags</label>
+        <input id="s-hashtag" type="text" placeholder="buildinpublic" class="sb-input" />
+      </div>
+      <div>
+        <label for="s-lang" class="mb-1 block text-sm font-medium text-slate-700">Language</label>
+        <select id="s-lang" class="sb-input">
+          <option value="">Any language</option>
+          <option value="en">English</option>
+          <option value="zh">Chinese</option>
+          <option value="ja">Japanese</option>
+          <option value="ko">Korean</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="pt">Portuguese</option>
+          <option value="ru">Russian</option>
+          <option value="ar">Arabic</option>
+          <option value="id">Indonesian</option>
+          <option value="vi">Vietnamese</option>
+        </select>
+      </div>
+      <div>
+        <label for="s-from" class="mb-1 block text-sm font-medium text-slate-700">From this user</label>
+        <input id="s-from" type="text" placeholder="openai" class="sb-input" />
+      </div>
+      <div>
+        <label for="s-to" class="mb-1 block text-sm font-medium text-slate-700">In reply to this user</label>
+        <input id="s-to" type="text" placeholder="elonmusk" class="sb-input" />
+      </div>
+      <div>
+        <label for="s-mention" class="mb-1 block text-sm font-medium text-slate-700">Mentioning this user</label>
+        <input id="s-mention" type="text" placeholder="xdevelopers" class="sb-input" />
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label for="s-since" class="mb-1 block text-sm font-medium text-slate-700">Since</label>
+          <input id="s-since" type="date" class="sb-input" />
+        </div>
+        <div>
+          <label for="s-until" class="mb-1 block text-sm font-medium text-slate-700">Until</label>
+          <input id="s-until" type="date" class="sb-input" />
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <label for="s-replies" class="mb-1 block text-sm font-medium text-slate-700">Min replies</label>
+          <input id="s-replies" type="number" min="0" placeholder="10" class="sb-input" />
+        </div>
+        <div>
+          <label for="s-faves" class="mb-1 block text-sm font-medium text-slate-700">Min likes</label>
+          <input id="s-faves" type="number" min="0" placeholder="500" class="sb-input" />
+        </div>
+        <div>
+          <label for="s-rts" class="mb-1 block text-sm font-medium text-slate-700">Min reposts</label>
+          <input id="s-rts" type="number" min="0" placeholder="100" class="sb-input" />
+        </div>
+      </div>
+      <div class="flex flex-wrap items-center gap-4 pt-1 text-sm">
+        <label class="flex items-center gap-2"><input id="s-links" type="checkbox" class="h-4 w-4 accent-[#1d9bf0]" /> Has links</label>
+        <label class="flex items-center gap-2"><input id="s-media" type="checkbox" class="h-4 w-4 accent-[#1d9bf0]" /> Has media</label>
+        <label class="flex items-center gap-2"><input id="s-question" type="checkbox" class="h-4 w-4 accent-[#1d9bf0]" /> Is a question</label>
+        <label class="flex items-center gap-2"><input id="s-latest" type="checkbox" class="h-4 w-4 accent-[#1d9bf0]" checked /> Show latest first</label>
+      </div>
+    </div>
+
+    <div class="mt-6 rounded-xl bg-slate-900 p-4">
+      <div class="flex items-center justify-between gap-3">
+        <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Generated query</p>
+        <button id="s-copy" class="rounded-lg border border-slate-600 px-3 py-1 text-xs text-slate-300 hover:border-brand hover:text-brand">
+          Copy
+        </button>
+      </div>
+      <p id="s-query" class="mt-2 min-h-6 break-all font-mono text-sm text-emerald-300">—</p>
+      <a
+        id="s-open"
+        href="https://x.com/search?q=&f=live"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="mt-4 inline-block rounded-full bg-brand px-5 py-2 text-sm font-semibold text-white hover:bg-brand-dark"
+      >
+        Open in X Search ↗
+      </a>
+    </div>
+  </section>
+
+  <AdSlot />
+
+  <section class="mt-12">
+    <h2 class="text-xl font-bold">X search operators cheat sheet</h2>
+    <p class="mt-2 text-slate-600">
+      The builder uses these operators under the hood. You can also type them straight into the
+      search box on x.com.
+    </p>
+    <div class="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+          <tr>
+            <th class="px-4 py-3">Operator</th>
+            <th class="px-4 py-3">Finds posts that…</th>
+            <th class="px-4 py-3">Example</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          {
+            operators.map(([op, desc, example]) => (
+              <tr>
+                <td class="whitespace-nowrap px-4 py-3 font-mono text-xs font-semibold">{op}</td>
+                <td class="px-4 py-3 text-slate-600">{desc}</td>
+                <td class="whitespace-nowrap px-4 py-3 font-mono text-xs text-slate-500">{example}</td>
+              </tr>
+            ))
+          }
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <Faq items={faq} />
+
+  <section class="mt-12">
+    <h2 class="text-xl font-bold">Related tools</h2>
+    <ul class="mt-4 grid gap-3 sm:grid-cols-3">
+      {
+        related.map((t) => (
+          <li>
+            <a href={t.slug} class="block rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium hover:border-brand">
+              {t.name} <span class="text-slate-400">→</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</Base>
+
+<style>
+  .sb-input {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid #cbd5e1;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.875rem;
+  }
+  .sb-input:focus {
+    outline: none;
+    border-color: #1d9bf0;
+  }
+</style>
+
+<script>
+  const $ = (id: string) => document.getElementById(id) as HTMLInputElement;
+  const fields = {
+    all: $('s-all'),
+    exact: $('s-exact'),
+    any: $('s-any'),
+    none: $('s-none'),
+    hashtag: $('s-hashtag'),
+    lang: $('s-lang'),
+    from: $('s-from'),
+    to: $('s-to'),
+    mention: $('s-mention'),
+    since: $('s-since'),
+    until: $('s-until'),
+    replies: $('s-replies'),
+    faves: $('s-faves'),
+    rts: $('s-rts'),
+    links: $('s-links'),
+    media: $('s-media'),
+    question: $('s-question'),
+    latest: $('s-latest'),
+  };
+  const queryEl = document.getElementById('s-query')!;
+  const openBtn = document.getElementById('s-open') as HTMLAnchorElement;
+
+  const handle = (v: string) => (v.startsWith('@') ? v.slice(1) : v);
+
+  function buildQuery(): string {
+    const parts: string[] = [];
+    const all = fields.all.value.trim();
+    if (all) parts.push(all);
+    const exact = fields.exact.value.trim();
+    if (exact) parts.push(`"${exact.replace(/"/g, '')}"`);
+    const any = fields.any.value.trim();
+    if (any) parts.push('(' + any.split(/\s+/).join(' OR ') + ')');
+    const none = fields.none.value.trim();
+    if (none) parts.push(none.split(/\s+/).map((w) => '-' + w).join(' '));
+    const tags = fields.hashtag.value.trim();
+    if (tags) parts.push(tags.split(/\s+/).map((t) => '#' + t.replace(/^#/, '')).join(' '));
+    const from = handle(fields.from.value.trim());
+    if (from) parts.push('from:' + from);
+    const to = handle(fields.to.value.trim());
+    if (to) parts.push('to:' + to);
+    const mention = handle(fields.mention.value.trim());
+    if (mention) parts.push('@' + mention);
+    if (fields.since.value) parts.push('since:' + fields.since.value);
+    if (fields.until.value) parts.push('until:' + fields.until.value);
+    if (fields.replies.value) parts.push('min_replies:' + fields.replies.value);
+    if (fields.faves.value) parts.push('min_faves:' + fields.faves.value);
+    if (fields.rts.value) parts.push('min_retweets:' + fields.rts.value);
+    if (fields.links.checked) parts.push('filter:links');
+    if (fields.media.checked) parts.push('filter:media');
+    if (fields.question.checked) parts.push('?');
+    const lang = fields.lang.value;
+    if (lang) parts.push('lang:' + lang);
+    return parts.join(' ');
+  }
+
+  function render() {
+    const q = buildQuery();
+    queryEl.textContent = q || '—';
+    const url = 'https://x.com/search?q=' + encodeURIComponent(q) + (fields.latest.checked ? '&f=live' : '');
+    openBtn.href = q ? url : 'https://x.com/search?q=';
+  }
+
+  Object.values(fields).forEach((el) => {
+    el.addEventListener('input', render);
+    el.addEventListener('change', render);
+  });
+  render();
+
+  document.getElementById('s-copy')!.addEventListener('click', async (e) => {
+    const btn = e.currentTarget as HTMLButtonElement;
+    await navigator.clipboard.writeText(buildQuery());
+    const old = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => (btn.textContent = old), 1200);
+  });
+</script>

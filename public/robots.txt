@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://twittertools.com/sitemap-index.xml

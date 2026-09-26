@@ -1,0 +1,190 @@
+---
+import Base from '../layouts/Base.astro';
+import ToolHero from '../components/ToolHero.astro';
+import Faq from '../components/Faq.astro';
+import AdSlot from '../components/AdSlot.astro';
+import { TOOLS } from '../lib/tools';
+
+const faq = [
+  {
+    q: 'What is a tweet ID / Snowflake ID?',
+    a: 'Every X post has a unique numeric ID called a Snowflake. It is generated from a timestamp, so the ID itself tells you when the post was created — no API call needed.',
+  },
+  {
+    q: 'How do I get the ID from a post URL?',
+    a: 'The long number at the end of the URL is the ID. In https://x.com/elonmusk/status/1234567890, the ID is 1234567890. Paste the whole URL here and the parser extracts it for you.',
+  },
+  {
+    q: 'Can I go from an ID back to a date?',
+    a: 'Yes. The first 41 bits of the ID encode milliseconds since X\'s custom epoch (November 4, 2010). Paste any ID and the timestamp appears instantly.',
+  },
+  {
+    q: 'Does this tool call the X API?',
+    a: 'No — all parsing happens locally in your browser. The date is decoded from the ID itself, which is why it works even for deleted posts.',
+  },
+];
+
+const related = TOOLS.filter((t) => t.slug !== '/tweet-url-parser').slice(0, 3);
+---
+
+<Base
+  title="Tweet URL & ID Parser — Extract ID, Username and Date | TwitterTools"
+  description="Paste an X (Twitter) post URL or ID to extract the tweet ID, username, permalink and exact posting date. Works offline — dates are decoded from the Snowflake ID itself."
+  path="/tweet-url-parser"
+>
+  <ToolHero
+    title="Tweet URL & ID Parser"
+    subtitle="Paste a post URL, a bare ID, or any text containing one — get the ID, author, permalink and exact posting time. Everything runs in your browser."
+  />
+
+  <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+    <label for="parser-input" class="mb-2 block text-sm font-medium text-slate-700">
+      Post URL or ID
+    </label>
+    <input
+      id="parser-input"
+      type="text"
+      class="w-full rounded-xl border border-slate-300 px-4 py-3 font-mono text-base focus:border-brand focus:outline-none"
+      placeholder="https://x.com/username/status/1234567890123456789"
+      autocomplete="off"
+      spellcheck="false"
+    />
+
+    <div id="parser-result" class="mt-5 hidden">
+      <dl class="grid gap-3 sm:grid-cols-2">
+        <div class="rounded-xl bg-slate-50 p-4">
+          <dt class="text-xs font-medium uppercase tracking-wide text-slate-400">Tweet ID</dt>
+          <dd class="mt-1 flex items-center gap-2 font-mono text-sm font-semibold break-all">
+            <span id="p-id"></span>
+            <button data-copy="p-id" class="copy ml-auto shrink-0 rounded-md border border-slate-200 px-2 py-0.5 text-xs font-sans text-slate-500 hover:border-brand hover:text-brand">Copy</button>
+          </dd>
+        </div>
+        <div class="rounded-xl bg-slate-50 p-4">
+          <dt class="text-xs font-medium uppercase tracking-wide text-slate-400">Username</dt>
+          <dd class="mt-1 font-mono text-sm font-semibold break-all" id="p-user">—</dd>
+        </div>
+        <div class="rounded-xl bg-slate-50 p-4 sm:col-span-2">
+          <dt class="text-xs font-medium uppercase tracking-wide text-slate-400">Permalink</dt>
+          <dd class="mt-1 flex items-center gap-2 font-mono text-sm font-semibold break-all">
+            <a id="p-link" href="#" target="_blank" rel="noopener noreferrer" class="text-brand hover:underline"></a>
+            <button data-copy="p-link" class="copy ml-auto shrink-0 rounded-md border border-slate-200 px-2 py-0.5 text-xs font-sans text-slate-500 hover:border-brand hover:text-brand">Copy</button>
+          </dd>
+        </div>
+        <div class="rounded-xl bg-slate-50 p-4">
+          <dt class="text-xs font-medium uppercase tracking-wide text-slate-400">Posted at (UTC)</dt>
+          <dd class="mt-1 font-mono text-sm font-semibold" id="p-utc">—</dd>
+        </div>
+        <div class="rounded-xl bg-slate-50 p-4">
+          <dt class="text-xs font-medium uppercase tracking-wide text-slate-400">Posted at (your local time)</dt>
+          <dd class="mt-1 font-mono text-sm font-semibold" id="p-local">—</dd>
+        </div>
+      </dl>
+      <p class="mt-3 text-xs text-slate-400">
+        Dates are decoded from the ID's Snowflake timestamp (X epoch: 2010-11-04T01:42:54Z) and
+        show the moment the post was created, even if it has since been deleted.
+      </p>
+    </div>
+
+    <p id="parser-error" class="mt-4 hidden rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
+      Couldn't find a post ID in that input. Paste a URL like https://x.com/user/status/123… or a
+      numeric ID.
+    </p>
+  </section>
+
+  <AdSlot />
+
+  <section class="mt-12">
+    <h2 class="text-xl font-bold">What's inside a Snowflake ID?</h2>
+    <p class="mt-3 max-w-3xl text-slate-600">
+      X generates IDs as 64-bit Snowflakes. The top 41 bits are milliseconds since a custom epoch,
+      followed by machine and sequence bits. That's why every ID doubles as a creation timestamp —
+      and why IDs are always increasing.
+    </p>
+    <div class="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+      <table class="w-full text-left text-sm">
+        <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-400">
+          <tr>
+            <th class="px-4 py-3">Bits</th>
+            <th class="px-4 py-3">Field</th>
+            <th class="px-4 py-3">Meaning</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-slate-100">
+          <tr><td class="px-4 py-3 font-mono">41</td><td class="px-4 py-3">Timestamp</td><td class="px-4 py-3 text-slate-600">Milliseconds since 1288834974657 (Nov 4, 2010)</td></tr>
+          <tr><td class="px-4 py-3 font-mono">10</td><td class="px-4 py-3">Machine ID</td><td class="px-4 py-3 text-slate-600">The server that generated the ID</td></tr>
+          <tr><td class="px-4 py-3 font-mono">12</td><td class="px-4 py-3">Sequence</td><td class="px-4 py-3 text-slate-600">Counter for IDs created in the same millisecond</td></tr>
+          <tr><td class="px-4 py-3 font-mono">1</td><td class="px-4 py-3">Unused</td><td class="px-4 py-3 text-slate-600">Sign bit, always zero</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <Faq items={faq} />
+
+  <section class="mt-12">
+    <h2 class="text-xl font-bold">Related tools</h2>
+    <ul class="mt-4 grid gap-3 sm:grid-cols-3">
+      {
+        related.map((t) => (
+          <li>
+            <a href={t.slug} class="block rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium hover:border-brand">
+              {t.name} <span class="text-slate-400">→</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</Base>
+
+<script>
+  import { parseTweetInput, permalinkFor, snowflakeToDate } from '../lib/snowflake';
+
+  const input = document.getElementById('parser-input') as HTMLInputElement;
+  const result = document.getElementById('parser-result')!;
+  const error = document.getElementById('parser-error')!;
+  const elId = document.getElementById('p-id')!;
+  const elUser = document.getElementById('p-user')!;
+  const elLink = document.getElementById('p-link') as HTMLAnchorElement;
+  const elUtc = document.getElementById('p-utc')!;
+  const elLocal = document.getElementById('p-local')!;
+
+  function fmt(d: Date): string {
+    return d.toISOString().slice(0, 19).replace('T', ' ') + ' UTC';
+  }
+
+  function render() {
+    const parsed = parseTweetInput(input.value);
+    if (!parsed) {
+      if (input.value.trim()) error.classList.remove('hidden');
+      result.classList.add('hidden');
+      error.classList.toggle('hidden', !input.value.trim());
+      return;
+    }
+    error.classList.add('hidden');
+    result.classList.remove('hidden');
+
+    const date = snowflakeToDate(parsed.id);
+    elId.textContent = parsed.id;
+    elUser.textContent = parsed.screenName ? '@' + parsed.screenName : 'not in the input (ID only)';
+    const link = permalinkFor(parsed.id, parsed.screenName);
+    elLink.textContent = link;
+    elLink.href = link;
+    elUtc.textContent = fmt(date);
+    elLocal.textContent = date.toLocaleString();
+  }
+
+  input.addEventListener('input', render);
+  render();
+
+  document.querySelectorAll<HTMLButtonElement>('.copy').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const target = document.getElementById(btn.dataset.copy!);
+      const text = (target as HTMLElement).textContent ?? '';
+      await navigator.clipboard.writeText(text);
+      const old = btn.textContent;
+      btn.textContent = 'Copied!';
+      setTimeout(() => (btn.textContent = old), 1200);
+    });
+  });
+</script>
