@@ -253,7 +253,11 @@ export async function renderTweetCard(canvas: HTMLCanvasElement, t: TweetData, t
   const hasMedia = mediaItems.length > 0;
   const headH = Math.max(AVATAR, 24);
   const textH = lines.length * LINE_H;
-  const H = PAD + headH + 14 + textH + (hasMedia ? 14 + media.height : 0) + 16 + 1 + 14 + 20 + PAD;
+  const contentBottom = PAD + headH + 14 + textH + (hasMedia ? 14 + media.height : 0);
+  const urlBase = contentBottom + 20; // permalink line below the media / text
+  const footY = urlBase + 13;
+  const baseY = footY + 24;
+  const H = Math.round(baseY + PAD);
 
   canvas.width = W * SCALE;
   canvas.height = Math.round(H * SCALE);
@@ -329,11 +333,15 @@ export async function renderTweetCard(canvas: HTMLCanvasElement, t: TweetData, t
       ctx.restore();
       if (i === 0 && mediaItems[0].type !== 'photo') badge(ctx, x + 10, cy + 10, mediaItems[0], p);
     }
-    y = top + media.height;
   }
 
+  // permalink: the original post's URL, below the media / text
+  const permalink = t.url || `https://x.com/i/status/${t.id}`;
+  ctx.fillStyle = p.muted;
+  ctx.font = `400 13px ${FAMILY}`;
+  ctx.fillText(permalink, PAD, urlBase);
+
   // divider
-  const footY = (hasMedia ? y : PAD + headH + 14 + textH) + 16;
   ctx.strokeStyle = p.divider;
   ctx.beginPath();
   ctx.moveTo(PAD, footY + 0.5);
@@ -341,7 +349,6 @@ export async function renderTweetCard(canvas: HTMLCanvasElement, t: TweetData, t
   ctx.stroke();
 
   // footer: date · engagement, watermark right
-  const baseY = footY + 24;
   ctx.fillStyle = p.muted;
   ctx.font = `400 13px ${FAMILY}`;
   let fx = PAD;
