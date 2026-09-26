@@ -37,7 +37,7 @@ export const TOOLS: Tool[] = [
   {
     slug: '/twitter-thread-reader',
     name: 'Thread Reader',
-    tagline: 'Unroll a thread into one clean page. Export to Markdown, TXT or HTML.',
+    tagline: 'Unroll a thread into one clean page. Export to Markdown, TXT, HTML or PDF.',
     category: 'read',
     icon: svg('<path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" />'),
   },

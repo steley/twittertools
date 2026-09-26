@@ -67,4 +67,11 @@ export function wireFetcher(o: FetcherOptions): void {
       o.button.textContent = idle;
     }
   });
+
+  // Deep link support (e.g. from the homepage router): /tool?url=<post url>
+  const deepLink = new URLSearchParams(window.location.search).get('url');
+  if (deepLink && extractTweetId(deepLink)) {
+    o.input.value = deepLink;
+    o.form.requestSubmit();
+  }
 }

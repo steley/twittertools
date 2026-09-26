@@ -92,6 +92,35 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-character-counter').slice
     </div>
   </section>
 
+  <section class="mt-12">
+    <h2 class="text-xl font-bold">How to check your post length</h2>
+    <ol class="mt-4 grid gap-4 sm:grid-cols-3">
+      <li class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="text-sm font-bold text-brand">Step 1</p>
+        <p class="mt-1 font-medium">Type or paste</p>
+        <p class="mt-1 text-sm text-slate-600">
+          Write your post in the box above — or paste it in from anywhere. Nothing leaves your
+          browser.
+        </p>
+      </li>
+      <li class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="text-sm font-bold text-brand">Step 2</p>
+        <p class="mt-1 font-medium">Watch the weighted count</p>
+        <p class="mt-1 text-sm text-slate-600">
+          The big number applies X's real rules: every link costs 23, CJK characters and emoji
+          cost 2.
+        </p>
+      </li>
+      <li class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="text-sm font-bold text-brand">Step 3</p>
+        <p class="mt-1 font-medium">Trim to fit</p>
+        <p class="mt-1 text-sm text-slate-600">
+          The bar turns amber near the limit and red once you are over — edit until it fits.
+        </p>
+      </li>
+    </ol>
+  </section>
+
   <Faq items={faq} />
 
   <section class="mt-12">

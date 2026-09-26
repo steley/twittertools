@@ -12,7 +12,7 @@ const faq = [
   },
   {
     q: 'Can I export a thread as Markdown?',
-    a: 'Yes — one click gives you a .md file with every post numbered, ready for Notion, Obsidian, GitHub or any static-site generator. TXT and standalone HTML exports are there too.',
+    a: 'Yes — one click gives you a .md file with every post numbered, ready for Notion, Obsidian, GitHub or any static-site generator. TXT and standalone HTML exports are there too, and the PDF export opens your browser\'s print dialog — choose "Save as PDF".',
   },
   {
     q: 'Do I need to log in to X?',
@@ -33,12 +33,12 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
 
 <Base
   title="X (Twitter) Thread Reader — Unroll & Export to Markdown | Free"
-  description="Unroll any public X (Twitter) thread into one readable page. Copy the whole thread or export it as Markdown, TXT or HTML. Free, no login required."
+  description="Unroll any public X (Twitter) thread into one readable page. Copy the whole thread or export it as Markdown, TXT, HTML or PDF. Free, no login required."
   path="/twitter-thread-reader"
 >
   <ToolHero
     title="X (Twitter) Thread Reader"
-    subtitle="Unroll a thread into one clean page — then copy it or export to Markdown, TXT or HTML. Free, no X login required."
+    subtitle="Unroll a thread into one clean page — then copy it or export to Markdown, TXT, HTML or PDF. Free, no X login required."
   />
 
   <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
@@ -102,6 +102,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       <button data-tr-export="txt" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Export TXT</button>
       <button data-tr-export="mdfile" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Export .md</button>
       <button data-tr-export="html" class="tr-exp rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white hover:bg-brand-dark">Export HTML</button>
+      <button data-tr-export="pdf" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Export PDF</button>
     </div>
 
     <div id="tr-tweets" class="mt-6 space-y-4"></div>
@@ -134,6 +135,35 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
         </p>
       </div>
     </div>
+  </section>
+
+  <section class="mt-12">
+    <h2 class="text-xl font-bold">How to unroll a thread</h2>
+    <ol class="mt-4 grid gap-4 sm:grid-cols-3">
+      <li class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="text-sm font-bold text-brand">Step 1</p>
+        <p class="mt-1 font-medium">Get the thread</p>
+        <p class="mt-1 text-sm text-slate-600">
+          Copy the link to any post in the thread. Only have the text? Switch to the Paste mode
+          instead.
+        </p>
+      </li>
+      <li class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="text-sm font-bold text-brand">Step 2</p>
+        <p class="mt-1 font-medium">Unroll it</p>
+        <p class="mt-1 text-sm text-slate-600">
+          Press Unroll and the reader collects the posts it can reach. If the chain can't be
+          followed, the Paste mode always works.
+        </p>
+      </li>
+      <li class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="text-sm font-bold text-brand">Step 3</p>
+        <p class="mt-1 font-medium">Read or export</p>
+        <p class="mt-1 text-sm text-slate-600">
+          Read the whole thing on one page, copy it, or export to Markdown, TXT, HTML or PDF.
+        </p>
+      </li>
+    </ol>
   </section>
 
   <Faq items={faq} />
@@ -373,6 +403,13 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
 
+  /** PDF export = the HTML export in a print-ready window; the browser's "Save as PDF" does the rest. */
+  function pdfDoc(): string {
+    const printCss = '<style>@page{margin:14mm}@media print{body{margin:1rem}}</style>';
+    const autoprint = '<script>window.addEventListener("load",function(){setTimeout(function(){window.print()},400)})<\/script>';
+    return htmlDoc().replace('</head>', printCss + autoprint + '</head>');
+  }
+
   document.querySelectorAll<HTMLButtonElement>('.tr-exp').forEach((btn) => {
     btn.addEventListener('click', async () => {
       if (!thread.length) return;
@@ -393,10 +430,28 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
         case 'html':
           download(`thread-${stamp}.html`, htmlDoc(), 'text/html');
           break;
+        case 'pdf': {
+          const w = window.open('', '_blank');
+          if (!w) {
+            showError('The PDF export opens a new window — please allow pop-ups for this site and try again.');
+            return;
+          }
+          w.opener = null;
+          w.document.write(pdfDoc());
+          w.document.close();
+          break;
+        }
       }
       const old = btn.textContent;
       btn.textContent = '✓ Done';
       setTimeout(() => (btn.textContent = old), 1200);
     });
   });
+
+  // Deep link support (e.g. from the homepage router): /twitter-thread-reader?url=<post url>
+  const deepLink = new URLSearchParams(window.location.search).get('url');
+  if (deepLink && extractTweetId(deepLink)) {
+    urlInput.value = deepLink;
+    form.requestSubmit();
+  }
 </script>

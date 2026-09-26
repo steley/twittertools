@@ -7,9 +7,14 @@ at them (see README "Local development without X access").
 """
 
 import asyncio
+import os
+
 from aiohttp import web
 
 from mock_test import VIDEO_MEDIA, PHOTO_MEDIA, tweet_obj
+
+SYND_PORT = int(os.environ.get("SYND_PORT", "8898"))
+MEDIA_PORT = int(os.environ.get("MEDIA_PORT", "8899"))
 
 
 async def mock_syndication(request):
@@ -17,6 +22,7 @@ async def mock_syndication(request):
         "111111111111111111": tweet_obj("111111111111111111", "Hello world from the mock endpoint! This post has a video attached.", "mockuser", media=VIDEO_MEDIA),
         "222222222222222222": tweet_obj("222222222222222222", "Photo mode: two nice pictures from the mock.", "mockuser", media=PHOTO_MEDIA * 2),
         "333333333333333333": tweet_obj("333333333333333333", "1/ This is the first post of a mock thread.", "mockuser", reply_to="222222222222222222"),
+        "444444444444444444": tweet_obj("444444444444444444", "Mixed mode: a video and a photo in one post.", "mockuser", media=VIDEO_MEDIA + PHOTO_MEDIA),
     }
     data = fixtures.get(request.query.get("id", ""))
     if data is None:
@@ -33,15 +39,15 @@ async def main():
     app1.router.add_get("/tweet-result", mock_syndication)
     runner1 = web.AppRunner(app1)
     await runner1.setup()
-    await web.TCPSite(runner1, "127.0.0.1", 8898).start()
+    await web.TCPSite(runner1, "127.0.0.1", SYND_PORT).start()
 
     app2 = web.Application()
     app2.router.add_get("/{tail:.*}", mock_media)
     runner2 = web.AppRunner(app2)
     await runner2.setup()
-    await web.TCPSite(runner2, "127.0.0.1", 8899).start()
+    await web.TCPSite(runner2, "127.0.0.1", MEDIA_PORT).start()
 
-    print("dev mocks: syndication :8898, media :8899")
+    print(f"dev mocks: syndication :{SYND_PORT}, media :{MEDIA_PORT}")
     await asyncio.Event().wait()
 
 
