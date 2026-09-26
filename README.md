@@ -95,35 +95,43 @@ Verify `dist/` contains no dev references: `grep -r "127.0.0.1" dist/` should be
 
 ## Deploy to the VPS
 
-The VPS runs **Apache** with a certbot-issued Let's Encrypt certificate for
-twittertools.com (see `deploy/apache-twittertools.conf` for the vhost).
-An nginx config is kept in `deploy/nginx-twittertools.conf` as an alternative.
+Two server configs are provided — **Apache** (`deploy/apache-twittertools.conf`,
+what this VPS currently runs, with the certbot-managed certificate) and
+**nginx** (`deploy/nginx-twittertools.conf`, alternative). Steps 1–2 are
+identical; pick **3A or 3B**. Step 4 differs only in who renews the cert.
+
+### 1. Upload (from the local machine)
 
 ```bash
-# 1. upload (site + server code) — one rsync per directory: each --delete
-#    is scoped to its own destination dir and cannot touch the others
-#    (a combined `rsync --delete server/ deploy/ .../twittertools/` would
-#    MERGE both into the top level and delete dist/ — do not do that).
-#    .venv MUST be excluded on server/: it doesn't exist locally (and would
-#    carry macOS binaries), and without --exclude the --delete pass would
-#    wipe the Linux venv created in step 2 on every re-deploy.
+# One rsync per directory: each --delete is scoped to its own destination
+# and cannot touch the others (a combined `rsync --delete server/ deploy/
+# .../twittertools/` MERGES both into the top level and deletes dist/ —
+# do not do that).  .venv MUST be excluded on server/: it doesn't exist
+# locally (and would carry macOS binaries), and without --exclude the
+# --delete pass would wipe the Linux venv from step 2 on every re-deploy.
 rsync -av --delete dist/   root@VPS_IP:/var/www/twittertools/dist/
 rsync -av --delete --exclude .venv --exclude __pycache__ \
      server/ root@VPS_IP:/var/www/twittertools/server/
 rsync -av --delete deploy/ root@VPS_IP:/var/www/twittertools/deploy/
+```
 
-# 2. on the VPS — API service (create the venv here, ON the VPS)
+### 2. API service (on the VPS — the venv is created here, not uploaded)
+
+```bash
 apt update && apt install -y python3-venv   # fresh Ubuntu: python3 -m venv fails without it
 cd /var/www/twittertools/server
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp twittertools-api.service /etc/systemd/system/   # paths inside match this layout
 systemctl daemon-reload && systemctl enable --now twittertools-api
 curl http://127.0.0.1:8787/health          # -> ok
+```
 
-# 3. Apache site (static + /api/ reverse proxy)
-#    Replace the contents of the certbot-generated SSL vhost with our config
-#    (backup first). Do NOT set DocumentRoot to /var/www/twittertools —
-#    that would expose server/ and deploy/ to the public web.
+### 3A. Apache (current VPS — static + /api/ reverse proxy)
+
+```bash
+# Replace the contents of the certbot-generated SSL vhost with our config
+# (backup first). DocumentRoot is .../dist — do NOT point it at
+# /var/www/twittertools, that exposes server/ and deploy/ to the web.
 sudo cp /etc/apache2/sites-enabled/twittertools-le-ssl.conf \
         /etc/apache2/sites-enabled/twittertools-le-ssl.conf.bak
 sudo cp /var/www/twittertools/deploy/apache-twittertools.conf \
@@ -131,17 +139,56 @@ sudo cp /var/www/twittertools/deploy/apache-twittertools.conf \
 sudo a2enmod proxy proxy_http headers      # mod_ssl is already enabled
 sudo apache2ctl configtest                 # -> Syntax OK
 sudo systemctl reload apache2
-
-# 4. HTTPS — nothing to do here: the vhost uses the certbot-managed
-#    /etc/letsencrypt/live/twittertools.com/ certificates, which renew
-#    automatically. The port-80 vhost should already redirect to HTTPS
-#    (certbot added it) — verify with: curl -I http://twittertools.com
 ```
+
+### 3B. nginx (alternative — static + /api/ reverse proxy)
+
+```bash
+# If Apache currently holds :80/:443, stop it first — the two servers conflict.
+sudo systemctl disable --now apache2
+sudo cp /var/www/twittertools/deploy/nginx-twittertools.conf /etc/nginx/sites-available/twittertools
+sudo ln -sf /etc/nginx/sites-available/twittertools /etc/nginx/sites-enabled/
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### 4. HTTPS
+
+- **Apache (3A): nothing to do.** The vhost includes the certbot-managed
+  `/etc/letsencrypt/live/twittertools.com/` certificates, which renew
+  automatically. Verify: `curl -I https://twittertools.com` → 200 and
+  `curl -I http://twittertools.com` → 301 to HTTPS.
+- **nginx (3B):** `sudo certbot --nginx -d twittertools.com -d www.twittertools.com`
+  (installs the cert and auto-renews), or issue with acme.sh and wire the cert
+  paths as described in the header comment of `deploy/nginx-twittertools.conf`.
 
 > **The VPS must be able to reach `cdn.syndication.twimg.com`, `pbs.twimg.com` and
 > `video.twimg.com`.** Any standard overseas VPS can; verify with
 > `curl -I https://cdn.syndication.twimg.com/tweet-result?id=20`.
 > Do **not** set `TT_PROXY` in the systemd unit — that's a local-dev aid only.
+
+## Deploy gotchas (learned during the first rollout)
+
+- **rsync: never combine multiple source dirs with `--delete`.** Trailing-slash
+  sources merge into the destination root and `--delete` then treats existing
+  siblings (like `dist/`) as extraneous and deletes them. Always one rsync per
+  destination directory.
+- **`--exclude .venv` on the server rsync is mandatory.** The venv is created
+  on the VPS (step 2); without the exclude, every re-deploy's `--delete` wipes
+  it and the service dies on its next restart.
+- **Fresh Ubuntu needs `python3-venv`** before `python3 -m venv`, and a failed
+  attempt leaves a broken half-created `.venv` — `rm -rf .venv` and recreate
+  after installing the package.
+- **Apache `DocumentRoot` must be `.../dist`**, not the project parent — the
+  parent would publicly serve `server/` (source) and `deploy/` (configs).
+- **twimg hotlink protection:** requests carrying a non-X `Referer` get 403
+  from `video.twimg.com`. The backend therefore sends no Referer header at
+  all — don't add one back.
+- **The syndication endpoint is undocumented and has no SLA.** If the
+  downloader/thread tools start failing en masse, check `fetch_syndication()`
+  and the token algorithm in `server/downloader_server.py` first.
+- **VPS Python may be 3.8 (EOL).** Fine today (pip resolves aiohttp 3.10.x and
+  the backend is 3.8-compatible), but plan a distro/Python upgrade.
 
 ## Updating content
 
