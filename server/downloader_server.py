@@ -221,6 +221,13 @@ _working_token: Optional[str] = None  # remember which candidate algorithm works
 
 
 def client_ip(request: web.Request) -> str:
+    # Cloudflare sets CF-Connecting-IP from the actual TCP peer, so behind
+    # the CF proxy this is the only trustworthy per-client key; a client
+    # can freely set X-Forwarded-For, which is why nginx overwrites it and
+    # why it is only a fallback here.
+    cf_ip = request.headers.get("CF-Connecting-IP", "").strip()
+    if cf_ip:
+        return cf_ip
     fwd = request.headers.get("X-Forwarded-For")
     if fwd:
         return fwd.split(",")[0].strip()

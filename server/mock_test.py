@@ -131,9 +131,10 @@ def run_downloader():
 _opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 
 
-def get(path):
+def get(path, headers=None):
+    req = urllib.request.Request("http://127.0.0.1:8787" + path, headers=headers or {})
     try:
-        with _opener.open("http://127.0.0.1:8787" + path, timeout=15) as r:
+        with _opener.open(req, timeout=15) as r:
             return r.status, dict(r.headers), r.read()
     except urllib.error.HTTPError as e:
         return e.code, dict(e.headers), e.read()
@@ -222,6 +223,19 @@ def run_checks():
     )
     check("t.co expansion", txt == "look https://github.com/a/b and", repr(txt))
     check("expansion no-op safe", ds.expand_text_urls("plain text", [], []) == "plain text")
+
+    # 10. rate limiting keys on the real client IP (60 req / 60 s)
+    rl_ip = "203.0.113.77"
+    for _ in range(61):
+        code, _, _ = get("/api/tweet?id=111111111111111111", headers={"CF-Connecting-IP": rl_ip})
+    check("rate limit 429 on 61st", code == 429, str(code))
+    code, _, _ = get("/api/tweet?id=111111111111111111", headers={"X-Forwarded-For": "198.51.100.9"})
+    check("separate bucket per ip", code == 200, str(code))
+    code, _, _ = get(
+        "/api/tweet?id=111111111111111111",
+        headers={"CF-Connecting-IP": rl_ip, "X-Forwarded-For": "198.51.100.9"},
+    )
+    check("CF-Connecting-IP beats XFF", code == 429, str(code))
 
     print()
     if failures:
