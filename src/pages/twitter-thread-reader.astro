@@ -270,21 +270,36 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       body.textContent = t.text;
       card.appendChild(body);
 
-      if (t.images?.length) {
-        const imgs = el('div', 'mt-3 grid grid-cols-2 gap-2');
-        for (const src of t.images) {
-          const img = document.createElement('img');
-          img.src = src;
-          img.alt = 'Thread media';
-          img.loading = 'lazy';
-          img.className = 'max-h-56 w-full rounded-lg bg-slate-100 object-contain';
-          img.referrerPolicy = 'no-referrer';
-          imgs.appendChild(img);
-        }
-        card.appendChild(imgs);
-      }
+      if (t.images?.length) card.appendChild(buildImages(t.images));
       tweetsEl.appendChild(card);
     });
+  }
+
+  /** Justified photo rows: images in a row share one height and each width
+   * follows its natural aspect (flex-grow = w/h once loaded), so nothing is
+   * cropped and no letterbox bars appear. Two per row; a leftover image
+   * renders full width. */
+  function buildImages(srcs: string[]): HTMLElement {
+    const wrap = el('div', 'mt-3 space-y-2');
+    for (let i = 0; i < srcs.length; i += 2) {
+      const div = el('div', 'flex gap-2');
+      for (const src of srcs.slice(i, i + 2)) {
+        const img = document.createElement('img');
+        img.src = src;
+        img.alt = 'Thread media';
+        img.loading = 'lazy';
+        img.referrerPolicy = 'no-referrer';
+        img.className = 'min-w-0 rounded-lg bg-slate-100';
+        img.style.flex = '1 1 0%';
+        img.style.height = 'auto';
+        img.addEventListener('load', () => {
+          img.style.flexGrow = String(img.naturalWidth / (img.naturalHeight || 1));
+        });
+        div.appendChild(img);
+      }
+      wrap.appendChild(div);
+    }
+    return wrap;
   }
 
   // --- data sources -----------------------------------------------------------

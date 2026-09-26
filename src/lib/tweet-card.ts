@@ -211,19 +211,49 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   return lines;
 }
 
-function mediaLayout(count: number, cardW: number, firstAspect: number): { cols: number; rows: number; height: number; cellW: number; cellH: number; gap: number } {
+interface MediaRect { x: number; y: number; w: number; h: number }
+
+/**
+ * Tile images edge-to-edge like a justified photo collage: images in a row
+ * share one height and each width follows its own aspect ratio, so nothing
+ * is cropped and no letterbox margins appear. 1-3 images form a single row,
+ * 4 images a 2x2 grid with per-row heights.
+ */
+function tileImages(count: number, cardW: number, aspects: number[]): { rects: MediaRect[]; height: number } {
   const inner = cardW - PAD * 2;
-  if (count === 1) {
-    // size the block to the image's own aspect so nothing gets cropped
-    const h = Math.min(340, Math.max(120, inner * firstAspect));
-    return { cols: 1, rows: 1, height: h, cellW: inner, cellH: h, gap: 0 };
-  }
-  const cols = 2;
-  const rows = count <= 2 ? 1 : 2;
   const gap = 6;
-  const cellW = (inner - gap) / 2;
-  const cellH = count === 2 ? 150 : 132;
-  return { cols, rows, height: rows * cellH + (rows - 1) * gap, cellW, cellH, gap };
+  const MAX_H = 620; // keep extreme portrait singles from making the card endless
+  const rows: number[][] =
+    count === 4 ? [aspects.slice(0, 2), aspects.slice(2, 4)] : [aspects.slice(0, Math.max(1, count))];
+  const rects: MediaRect[] = [];
+  let y = 0;
+  for (const row of rows) {
+    const sum = row.reduce((a, b) => a + b, 0) || 16 / 9;
+    const natural = (inner - (row.length - 1) * gap) / sum;
+    const h = Math.min(natural, MAX_H);
+    if (row.length === 1) {
+      const w = Math.min(inner, h * row[0]);
+      rects.push({ x: (inner - w) / 2, y, w, h });
+    } else {
+      let widths = row.map((a) => h * a);
+      if (Math.min(...widths) < 64) {
+        // an extreme aspect mix would tile into slivers — equal cells instead
+        widths = row.map(() => (inner - (row.length - 1) * gap) / row.length);
+      }
+      const total = widths.reduce((a, b) => a + b, 0);
+      const step =
+        total + (row.length - 1) * gap < inner - 0.5
+          ? (inner - total) / (row.length - 1) // clamped height: spread the slack
+          : gap;
+      let x = 0;
+      widths.forEach((w) => {
+        rects.push({ x, y, w, h });
+        x += w + step;
+      });
+    }
+    y += h + gap;
+  }
+  return { rects, height: y - gap };
 }
 
 // --- main entry -------------------------------------------------------------------
@@ -246,10 +276,12 @@ export async function renderTweetCard(canvas: HTMLCanvasElement, t: TweetData, t
   const bodyText = stripTrailingMediaLink(t.text, mediaItems.length > 0);
   ctx.font = `${TEXT_SIZE}px ${FAMILY}`;
   const lines = bodyText ? wrapText(ctx, bodyText, W - PAD * 2) : [''];
-  const firstImg = mediaImgs[0];
-  const firstAspect =
-    firstImg && firstImg.naturalWidth ? firstImg.naturalHeight / firstImg.naturalWidth : 9 / 16;
-  const media = mediaLayout(mediaItems.length, W, firstAspect);
+  const aspects = mediaItems.map((m, i) => {
+    const im = mediaImgs[i];
+    // width/height (landscape = 1) — the tiling math below works in w/h terms
+    return im && im.naturalWidth ? im.naturalWidth / im.naturalHeight : 16 / 9;
+  });
+  const media = tileImages(mediaItems.length, W, aspects);
   const hasMedia = mediaItems.length > 0;
   const headH = Math.max(AVATAR, 24);
   const textH = lines.length * LINE_H;
@@ -318,21 +350,19 @@ export async function renderTweetCard(canvas: HTMLCanvasElement, t: TweetData, t
   // media grid
   if (hasMedia) {
     const top = y - LINE_H + 14 + 6;
-    for (let i = 0; i < mediaItems.length; i++) {
-      const col = i % media.cols;
-      const row = Math.floor(i / media.cols);
-      const x = PAD + col * (media.cellW + media.gap);
-      const cy = top + row * (media.cellH + media.gap);
+    media.rects.forEach((r, i) => {
+      const x = PAD + r.x;
+      const cy = top + r.y;
       const img = mediaImgs[i];
       ctx.save();
-      rr(ctx, x, cy, media.cellW, media.cellH, 14);
+      rr(ctx, x, cy, r.w, r.h, 14);
       ctx.clip();
       ctx.fillStyle = p.placeholder;
-      ctx.fillRect(x, cy, media.cellW, media.cellH);
-      if (img) drawContain(ctx, img, x, cy, media.cellW, media.cellH);
+      ctx.fillRect(x, cy, r.w, r.h);
+      if (img) drawContain(ctx, img, x, cy, r.w, r.h);
       ctx.restore();
       if (i === 0 && mediaItems[0].type !== 'photo') badge(ctx, x + 10, cy + 10, mediaItems[0], p);
-    }
+    });
   }
 
   // permalink: the original post's URL, below the media / text
