@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  frontend:
+    name: Astro check + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx astro check
+      - run: npm run build
+      - name: Production build must not contain dev-only API references
+        run: "! grep -rl '127.0.0.1:8787' dist/"
+
+  backend:
+    name: pyflakes + integration tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'   # match the deployment target; no 3.10+ syntax allowed
+          cache: pip
+          cache-dependency-path: server/requirements.txt
+      - run: pip install -r requirements.txt pyflakes
+      - run: python -m pyflakes downloader_server.py mock_test.py dev_mocks.py
+      - name: 16-check offline integration suite (mock syndication + media CDN)
+        run: python mock_test.py

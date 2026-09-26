@@ -48,6 +48,10 @@ Honest limitations (also stated in the UI):
 
 ## Local development
 
+CI (`.github/workflows/ci.yml`) runs the same checks on every push:
+`astro check` + production build for the frontend, pyflakes + the offline
+integration suite for the backend.
+
 ```bash
 npm install
 npm run dev                 # site at http://localhost:4321
