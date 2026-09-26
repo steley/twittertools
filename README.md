@@ -17,7 +17,7 @@ V1 ships six free, no-login tools:
 ├── src/pages/          6 tool pages + home + privacy + terms (Astro + Tailwind v4)
 ├── src/lib/            shared modules: tweet-count, snowflake, api client, tool registry
 ├── server/             downloader_server.py (aiohttp) + systemd unit + mock/dev tooling
-├── deploy/             nginx site config
+├── deploy/             Apache vhost (current VPS) + nginx config (alternative)
 ├── scripts/gen_og.py   regenerates public/og.png (social card)
 └── public/             robots.txt, favicon.svg, og.png
 ```
@@ -95,7 +95,9 @@ Verify `dist/` contains no dev references: `grep -r "127.0.0.1" dist/` should be
 
 ## Deploy to the VPS
 
-Same pattern as the domain4sale project: static files + nginx + a systemd service.
+The VPS runs **Apache** with a certbot-issued Let's Encrypt certificate for
+twittertools.com (see `deploy/apache-twittertools.conf` for the vhost).
+An nginx config is kept in `deploy/nginx-twittertools.conf` as an alternative.
 
 ```bash
 # 1. upload (site + server code) — one rsync per directory: each --delete
@@ -118,25 +120,22 @@ cp twittertools-api.service /etc/systemd/system/   # paths inside match this lay
 systemctl daemon-reload && systemctl enable --now twittertools-api
 curl http://127.0.0.1:8787/health          # -> ok
 
-# 3. nginx site (static + /api/ reverse proxy)
-cp /var/www/twittertools/deploy/nginx-twittertools.conf /etc/nginx/sites-available/twittertools
-ln -sf /etc/nginx/sites-available/twittertools /etc/nginx/sites-enabled/
-nginx -t && systemctl reload nginx
+# 3. Apache site (static + /api/ reverse proxy)
+#    Replace the contents of the certbot-generated SSL vhost with our config
+#    (backup first). Do NOT set DocumentRoot to /var/www/twittertools —
+#    that would expose server/ and deploy/ to the public web.
+sudo cp /etc/apache2/sites-enabled/twittertools-le-ssl.conf \
+        /etc/apache2/sites-enabled/twittertools-le-ssl.conf.bak
+sudo cp /var/www/twittertools/deploy/apache-twittertools.conf \
+        /etc/apache2/sites-enabled/twittertools-le-ssl.conf
+sudo a2enmod proxy proxy_http headers      # mod_ssl is already enabled
+sudo apache2ctl configtest                 # -> Syntax OK
+sudo systemctl reload apache2
 
-# 4. HTTPS — one acme.sh cert for apex + www, webroot = the dist dir
-#    (don't reuse domain4sale's issue_certs.sh: it reads that project's
-#    own domains.json)
-sudo mkdir -p /etc/nginx/ssl   # must exist before install-cert
-sudo acme.sh --issue -d twittertools.com -d www.twittertools.com \
-     -w /var/www/twittertools/dist
-sudo acme.sh --install-cert -d twittertools.com \
-     --key-file       /etc/nginx/ssl/twittertools.com.key \
-     --fullchain-file /etc/nginx/ssl/twittertools.com.crt \
-     --reloadcmd      "systemctl reload nginx"
-# then edit nginx-twittertools.conf: add `listen 443 ssl;` + the two
-# ssl_certificate lines to the server block, and turn the :80 block into a
-# redirect: return 301 https://twittertools.com$request_uri;
-nginx -t && systemctl reload nginx
+# 4. HTTPS — nothing to do here: the vhost uses the certbot-managed
+#    /etc/letsencrypt/live/twittertools.com/ certificates, which renew
+#    automatically. The port-80 vhost should already redirect to HTTPS
+#    (certbot added it) — verify with: curl -I http://twittertools.com
 ```
 
 > **The VPS must be able to reach `cdn.syndication.twimg.com`, `pbs.twimg.com` and
@@ -159,7 +158,9 @@ nginx -t && systemctl reload nginx
 1. **DNS** — point `twittertools.com` (+ `www`) A records at the VPS.
 2. **Deploy** — follow "Deploy to the VPS" above; verify `systemctl status twittertools-api`
    and `curl http://127.0.0.1:8787/health` → `ok`.
-3. **HTTPS** — acme.sh cert for apex + www, switch nginx to the TLS server block.
+3. **HTTPS** — the Apache vhost uses the certbot-managed certificate (renews
+   automatically). Verify: `curl -I https://twittertools.com` → 200, and
+   `curl -I http://twittertools.com` → 301 to HTTPS.
 4. **Smoke test from an outside network** — site loads over HTTPS; paste a known video post
    into the downloader and download the smallest variant; unroll one thread.
 5. **Search Console** — submit `https://twittertools.com/sitemap-index.xml` (and Bing
