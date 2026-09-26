@@ -1,8 +1,11 @@
 ---
+// Nav order follows expected usage frequency: downloaders first, then the
+// promoted screenshot tool, then reading tools. Revisit once analytics exist.
 const nav = [
   { href: '/twitter-video-downloader', label: 'Video Downloader' },
+  { href: '/tweet-screenshot-generator', label: 'Screenshot Generator', badge: 'New' },
   { href: '/twitter-thread-reader', label: 'Thread Reader' },
-  { href: '/twitter-advanced-search-builder', label: 'Search Builder' },
+  { href: '/twitter-image-downloader', label: 'Image Downloader' },
 ];
 ---
 
@@ -26,6 +29,11 @@ const nav = [
         nav.map((item) => (
           <a href={item.href} class="hover:text-brand">
             {item.label}
+            {item.badge && (
+              <span class="ml-1 rounded-full bg-brand/10 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-brand">
+                {item.badge}
+              </span>
+            )}
           </a>
         ))
       }
