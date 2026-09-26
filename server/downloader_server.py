@@ -30,6 +30,7 @@ fetch_syndication() need updating.
 """
 
 import asyncio
+import json
 import math
 import os
 import re
@@ -55,6 +56,50 @@ USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
+
+# Long ("note") posts: the syndication endpoint only returns a teaser (its
+# note_tweet field carries an ID but no body). X's web GraphQL endpoint,
+# called with the anonymous guest token every browser receives, still returns
+# the full text. Free, keyless, no login — same trick fxtwitter uses. Any
+# failure degrades gracefully to the teaser text.
+GRAPHQL_QUERY_ID = os.environ.get("TT_GRAPHQL_QUERY_ID", "0hWvDhmW8YQ-S_ib3azIrw")
+GUEST_API_ENABLED = os.environ.get("TT_GUEST_API", "1") != "0"
+WEB_BEARER_TOKEN = (
+    "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs="
+    "1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
+)
+GRAPHQL_TIMEOUT = ClientTimeout(total=12)
+GRAPHQL_COOLDOWN = 300.0        # seconds to back off after a guest-API failure
+_guest_token: Optional[str] = None
+_guest_cooldown_until = 0.0
+
+GRAPHQL_FEATURES = {
+    "creator_subscriptions_tweet_preview_api_enabled": True,
+    "communities_web_enable_tweet_community_results_fetch": True,
+    "c9s_tweet_anatomy_moderator_badge_enabled": True,
+    "articles_preview_enabled": True,
+    "responsive_web_edit_tweet_api_enabled": True,
+    "graphql_is_translatable_rweb_tweet_is_translatable_enabled": True,
+    "view_counts_everywhere_api_enabled": True,
+    "longform_notetweets_consumption_enabled": True,
+    "responsive_web_twitter_article_tweet_consumption_enabled": True,
+    "tweet_awards_web_tipping_enabled": False,
+    "responsive_web_home_pinned_timelines_enabled": True,
+    "creator_subscriptions_quote_tweet_preview_enabled": False,
+    "fetch_translast_enabled": False,
+    "super_follow_badge_privacy_enabled": False,
+    "super_follow_user_api_enabled": False,
+    "super_follow_tweet_api_enabled": False,
+    "rweb_tipjar_consumption_enabled": True,
+    "longform_notetweets_rich_text_read_enabled": True,
+    "longform_notetweets_inline_media_enabled": True,
+    "profile_label_improvements_pcf_label_in_post_enabled": True,
+    "responsive_web_graphql_exclude_directive_enabled": True,
+    "verified_phone_label_enabled": False,
+    "responsive_web_graphql_skip_user_profile_image_extensions_enabled": False,
+    "responsive_web_graphql_timeline_navigation_enabled": True,
+    "responsive_web_enhance_cards_enabled": False,
+}
 TWEET_ID_RE = re.compile(r"(?:x|twitter)\.com/(?:[A-Za-z0-9_]{1,15}/status(?:es)?/)?(\d{5,25})", re.I)
 BARE_ID_RE = re.compile(r"^\d{5,25}$")
 TWEET_CACHE_TTL = 600          # seconds
@@ -229,6 +274,7 @@ async def fetch_syndication(session: ClientSession, tweet_id: str) -> Tuple[int,
         if data is not None:
             async with _token_mode_lock:
                 _working_token = token
+            data = await enrich_note_tweet(session, tweet_id, data)
             return 200, data
         if status == 404:
             saw_404 = True
@@ -242,6 +288,95 @@ async def fetch_syndication(session: ClientSession, tweet_id: str) -> Tuple[int,
     if saw_auth:
         return 401, None
     return (last_status or 502), None
+
+
+# --------------------------------------------------------------------------- #
+# Guest GraphQL fallback (full text for long "note" posts)                     #
+# --------------------------------------------------------------------------- #
+
+async def get_guest_token(session: ClientSession, force: bool = False) -> Optional[str]:
+    """Anonymous web guest token — X issues one to every browser for free."""
+    global _guest_token
+    async with _token_mode_lock:
+        if _guest_token and not force:
+            return _guest_token
+        try:
+            async with session.post(
+                "https://api.x.com/1.1/guest/activate.json",
+                headers={"Authorization": f"Bearer {WEB_BEARER_TOKEN}"},
+                timeout=GRAPHQL_TIMEOUT,
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json(content_type=None)
+                    if data.get("guest_token"):
+                        _guest_token = str(data["guest_token"])
+        except (ClientError, asyncio.TimeoutError):
+            pass
+        return _guest_token
+
+
+async def _query_tweet_result(session: ClientSession, tweet_id: str, token: str) -> Tuple[int, Optional[dict]]:
+    variables = {
+        "tweetId": tweet_id,
+        "withCommunity": False,
+        "includePromotedContent": False,
+        "withVoice": False,
+    }
+    params = {
+        "variables": json.dumps(variables, separators=(",", ":")),
+        "features": json.dumps(GRAPHQL_FEATURES, separators=(",", ":")),
+    }
+    headers = {
+        "Authorization": f"Bearer {WEB_BEARER_TOKEN}",
+        "x-guest-token": token,
+    }
+    try:
+        async with session.get(
+            f"https://x.com/i/api/graphql/{GRAPHQL_QUERY_ID}/TweetResultByRestId",
+            params=params, headers=headers, timeout=GRAPHQL_TIMEOUT,
+        ) as resp:
+            if resp.status != 200:
+                return resp.status, None
+            data = await resp.json(content_type=None)
+            result = ((data.get("data") or {}).get("tweetResult") or {}).get("result") or {}
+            return 200, result
+    except (ClientError, asyncio.TimeoutError):
+        return 599, None
+
+
+async def fetch_note_tweet(session: ClientSession, tweet_id: str) -> Optional[dict]:
+    """Full note-tweet result {text, entity_set} from the guest API, or None."""
+    global _guest_cooldown_until
+    if not GUEST_API_ENABLED or time.time() < _guest_cooldown_until:
+        return None
+    token = await get_guest_token(session)
+    if not token:
+        _guest_cooldown_until = time.time() + GRAPHQL_COOLDOWN
+        return None
+    status, result = await _query_tweet_result(session, tweet_id, token)
+    if status in (401, 403, 429) and token:  # stale or rate-limited guest token
+        token = await get_guest_token(session, force=True)
+        if token:
+            status, result = await _query_tweet_result(session, tweet_id, token)
+    if status != 200 or not result:
+        _guest_cooldown_until = time.time() + GRAPHQL_COOLDOWN
+        return None
+    note = ((result.get("note_tweet") or {}).get("note_tweet_results") or {}).get("result") or {}
+    return note if note.get("text") else None
+
+
+async def enrich_note_tweet(session: ClientSession, tweet_id: str, data: dict) -> dict:
+    """Swap the syndication teaser for the full note body when one exists."""
+    if not data.get("note_tweet"):
+        return data
+    note = await fetch_note_tweet(session, tweet_id)
+    if not note:
+        return data
+    data["text"] = note.get("text") or data.get("text", "")
+    urls = (note.get("entity_set") or {}).get("urls") or []
+    if urls:
+        data.setdefault("entities", {})["urls"] = urls
+    return data
 
 
 # --------------------------------------------------------------------------- #
@@ -279,14 +414,35 @@ def normalize_media(m: dict) -> dict:
     }
 
 
+def expand_text_urls(text: str, urls: List[dict], media_urls: List[Optional[str]]) -> str:
+    """Rewrite t.co links to their real destinations and drop the media
+    placeholder link, matching what X shows on screen (media is rendered
+    separately). Done by string replacement — immune to the different index
+    conventions (UTF-16 vs code points) between endpoints."""
+    for e in urls or []:
+        short, full = e.get("url"), e.get("expanded_url")
+        if short and full and short in text:
+            text = text.replace(short, full)
+    for short in media_urls or []:
+        if short and short in text:
+            text = text.replace(short, " ")
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    return text.strip()
+
+
 def normalize_tweet(d: dict) -> dict:
     user = d.get("user") or {}
     tweet_id = d.get("id_str") or str(d.get("id", ""))
     screen = user.get("screen_name", "")
+    text = expand_text_urls(
+        d.get("text", ""),
+        (d.get("entities") or {}).get("urls") or [],
+        [m.get("url") for m in (d.get("mediaDetails") or [])],
+    )
     return {
         "id": tweet_id,
         "url": f"https://x.com/{screen or 'i'}/status/{tweet_id}",
-        "text": d.get("text", ""),
+        "text": text,
         "createdAt": d.get("created_at"),
         "user": {
             "name": user.get("name", ""),

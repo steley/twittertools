@@ -121,6 +121,7 @@ def run_downloader():
         PORT="8787",
         TT_SYNDICATION_URL="http://127.0.0.1:8898/tweet-result",
         TT_MEDIA_HOSTS="127.0.0.1",
+        TT_GUEST_API="0",  # never touch the real guest API from tests
     )
     proc = subprocess.Popen([sys.executable, "downloader_server.py"], env=env)
     return proc
@@ -211,6 +212,16 @@ def run_checks():
     # 8. cached second fetch
     code, _, body = get("/api/tweet?id=111111111111111111")
     check("cache hit", code == 200 and json.loads(body).get("cached") is True)
+
+    # 9. t.co expansion (pure function, no network)
+    import downloader_server as ds
+    txt = ds.expand_text_urls(
+        "look https://t.co/abc and https://t.co/xyz",
+        [{"url": "https://t.co/abc", "expanded_url": "https://github.com/a/b"}],
+        ["https://t.co/xyz"],
+    )
+    check("t.co expansion", txt == "look https://github.com/a/b and", repr(txt))
+    check("expansion no-op safe", ds.expand_text_urls("plain text", [], []) == "plain text")
 
     print()
     if failures:
