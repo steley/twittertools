@@ -114,7 +114,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-image-downloader').slic
 </Base>
 
 <script>
-  import { proxiedDownloadUrl, type MediaItem, type TweetData } from '../lib/api';
+  import { proxiedDownloadUrl, wireMediaImg, type MediaItem, type TweetData } from '../lib/api';
   import { el, renderTweetHeader, wireFetcher } from '../lib/media-page';
 
   const form = document.getElementById('id-form') as HTMLFormElement;
@@ -168,11 +168,10 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-image-downloader').slic
       for (const p of photos) {
         const card = el('div', 'overflow-hidden rounded-xl border border-slate-200');
         const img = document.createElement('img');
-        img.src = p.url + (p.url.includes('?') ? '&' : '?') + 'name=small';
         img.alt = 'Post image';
         img.loading = 'lazy';
         img.className = 'max-h-72 w-full bg-slate-100 object-contain';
-        img.referrerPolicy = 'no-referrer';
+        wireMediaImg(img, p.url + (p.url.includes('?') ? '&' : '?') + 'name=small', 'image-preview');
         card.appendChild(img);
 
         const bar = el('div', 'flex items-center gap-2 px-3 py-2.5');

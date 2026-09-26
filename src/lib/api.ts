@@ -86,3 +86,22 @@ export function proxiedDownloadUrl(mediaUrl: string, filename: string): string {
   const params = new URLSearchParams({ url: mediaUrl, name: filename });
   return `${API_BASE}/api/download?${params.toString()}`;
 }
+
+/** Load a media CDN image into an <img>: try the CDN directly (fastest where
+ * it is reachable), then fall back to the same-origin proxy when the direct
+ * load errors out or stalls past timeoutMs (censored networks blackhole the
+ * CDN instead of erroring), so previews still display. */
+export function wireMediaImg(img: HTMLImageElement, mediaUrl: string, filename: string, timeoutMs = 2500): void {
+  img.referrerPolicy = 'no-referrer';
+  let swapped = false;
+  const swap = () => {
+    if (swapped) return;
+    swapped = true;
+    img.src = proxiedDownloadUrl(mediaUrl, filename);
+  };
+  img.onerror = swap;
+  img.src = mediaUrl;
+  setTimeout(() => {
+    if (!img.complete || !img.naturalWidth) swap();
+  }, timeoutMs);
+}

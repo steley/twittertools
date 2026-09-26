@@ -185,7 +185,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
 </Base>
 
 <script>
-  import { extractTweetId, fetchThread, type TweetData } from '../lib/api';
+  import { extractTweetId, fetchThread, wireMediaImg, type TweetData } from '../lib/api';
 
   const tabUrl = document.getElementById('tr-tab-url') as HTMLButtonElement;
   const tabPaste = document.getElementById('tr-tab-paste') as HTMLButtonElement;
@@ -285,13 +285,12 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       const div = el('div', 'flex gap-2');
       for (const src of srcs.slice(i, i + 2)) {
         const img = document.createElement('img');
-        img.src = src;
         img.alt = 'Thread media';
         img.loading = 'lazy';
-        img.referrerPolicy = 'no-referrer';
         img.className = 'min-w-0 rounded-lg bg-slate-100';
         img.style.flex = '1 1 0%';
         img.style.height = 'auto';
+        wireMediaImg(img, src, 'thread-media');
         img.addEventListener('load', () => {
           img.style.flexGrow = String(img.naturalWidth / (img.naturalHeight || 1));
         });

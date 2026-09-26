@@ -2,7 +2,7 @@
  * Shared wiring for the media-fetch tool pages (video/image downloaders):
  * DOM helper, tweet header card and form/limit/error handling.
  */
-import { extractTweetId, fetchTweet, type TweetData } from './api';
+import { extractTweetId, fetchTweet, wireMediaImg, type TweetData } from './api';
 
 export function el(tag: string, cls?: string): HTMLElement {
   const n = document.createElement(tag);
@@ -15,10 +15,9 @@ export function renderTweetHeader(t: TweetData): HTMLElement {
   const head = el('div', 'flex items-center gap-3');
   if (t.user?.avatar) {
     const img = document.createElement('img');
-    img.src = t.user.avatar;
     img.alt = '';
     img.className = 'h-10 w-10 rounded-full';
-    img.referrerPolicy = 'no-referrer';
+    wireMediaImg(img, t.user.avatar, 'avatar');
     head.appendChild(img);
   }
   const who = el('div');

@@ -119,7 +119,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-video-downloader').slic
 </Base>
 
 <script>
-  import { proxiedDownloadUrl, type MediaItem, type TweetData } from '../lib/api';
+  import { proxiedDownloadUrl, wireMediaImg, type MediaItem, type TweetData } from '../lib/api';
   import { el, renderTweetHeader, wireFetcher } from '../lib/media-page';
 
   const form = document.getElementById('vd-form') as HTMLFormElement;
@@ -140,11 +140,10 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-video-downloader').slic
     const card = el('div', 'rounded-xl border border-slate-200 overflow-hidden');
     const thumbWrap = el('div', 'relative bg-slate-100');
     const img = document.createElement('img');
-    img.src = item.url;
     img.alt = 'Post media preview';
     img.loading = 'lazy';
     img.className = 'max-h-80 w-full object-contain';
-    img.referrerPolicy = 'no-referrer';
+    wireMediaImg(img, item.url, 'video-preview');
     thumbWrap.appendChild(img);
     const badge = el(
       'span',
