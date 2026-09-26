@@ -75,6 +75,23 @@ function drawCover(ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: num
   ctx.drawImage(img, (iw - dw / ratio) / 2, (ih - dh / ratio) / 2, dw / ratio, dh / ratio, dx, dy, dw, dh);
 }
 
+function drawContain(ctx: CanvasRenderingContext2D, img: HTMLImageElement, dx: number, dy: number, dw: number, dh: number) {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  if (!iw || !ih) return;
+  const ratio = Math.min(dw / iw, dh / ih);
+  const w = iw * ratio;
+  const h = ih * ratio;
+  ctx.drawImage(img, dx + (dw - w) / 2, dy + (dh - h) / 2, w, h);
+}
+
+/** X appends the media's own t.co link to the post text — drop that one
+ * trailing link (and only that one) when the card already shows the media. */
+function stripTrailingMediaLink(text: string, hasMedia: boolean): string {
+  if (!hasMedia) return text;
+  return text.replace(/\s*https?:\/\/t\.co\/[A-Za-z0-9]+\s*$/i, '');
+}
+
 function fmtDate(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
@@ -194,10 +211,11 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   return lines;
 }
 
-function mediaLayout(count: number, cardW: number): { cols: number; rows: number; height: number; cellW: number; cellH: number; gap: number } {
+function mediaLayout(count: number, cardW: number, firstAspect: number): { cols: number; rows: number; height: number; cellW: number; cellH: number; gap: number } {
   const inner = cardW - PAD * 2;
   if (count === 1) {
-    const h = Math.min(280, Math.max(130, inner * 0.52));
+    // size the block to the image's own aspect so nothing gets cropped
+    const h = Math.min(340, Math.max(120, inner * firstAspect));
     return { cols: 1, rows: 1, height: h, cellW: inner, cellH: h, gap: 0 };
   }
   const cols = 2;
@@ -225,9 +243,13 @@ export async function renderTweetCard(canvas: HTMLCanvasElement, t: TweetData, t
   const mediaImgs = await Promise.all(mediaItems.map((m) => loadImage(m.url)));
 
   // measure
+  const bodyText = stripTrailingMediaLink(t.text, mediaItems.length > 0);
   ctx.font = `${TEXT_SIZE}px ${FAMILY}`;
-  const lines = t.text ? wrapText(ctx, t.text, W - PAD * 2) : [''];
-  const media = mediaLayout(mediaItems.length, W);
+  const lines = bodyText ? wrapText(ctx, bodyText, W - PAD * 2) : [''];
+  const firstImg = mediaImgs[0];
+  const firstAspect =
+    firstImg && firstImg.naturalWidth ? firstImg.naturalHeight / firstImg.naturalWidth : 9 / 16;
+  const media = mediaLayout(mediaItems.length, W, firstAspect);
   const hasMedia = mediaItems.length > 0;
   const headH = Math.max(AVATAR, 24);
   const textH = lines.length * LINE_H;
@@ -303,7 +325,7 @@ export async function renderTweetCard(canvas: HTMLCanvasElement, t: TweetData, t
       ctx.clip();
       ctx.fillStyle = p.placeholder;
       ctx.fillRect(x, cy, media.cellW, media.cellH);
-      if (img) drawCover(ctx, img, x, cy, media.cellW, media.cellH);
+      if (img) drawContain(ctx, img, x, cy, media.cellW, media.cellH);
       ctx.restore();
       if (i === 0 && mediaItems[0].type !== 'photo') badge(ctx, x + 10, cy + 10, mediaItems[0], p);
     }
