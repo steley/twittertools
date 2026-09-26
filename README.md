@@ -111,6 +111,7 @@ rsync -av --delete --exclude .venv --exclude __pycache__ \
 rsync -av --delete deploy/ root@VPS_IP:/var/www/twittertools/deploy/
 
 # 2. on the VPS — API service (create the venv here, ON the VPS)
+apt update && apt install -y python3-venv   # fresh Ubuntu: python3 -m venv fails without it
 cd /var/www/twittertools/server
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp twittertools-api.service /etc/systemd/system/   # paths inside match this layout
