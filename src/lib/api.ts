@@ -2,7 +2,7 @@
  * Browser-side helpers for talking to the TwitterTools API.
  * In dev (`astro dev`) the site automatically talks to the locally running
  * backend on 127.0.0.1:8787. Production builds always use same-origin /api/
- * (nginx reverse proxy) — no build-time configuration, nothing to leak.
+ * (the Apache vhost reverse-proxies it) — no build-time configuration.
  */
 export const API_BASE: string = import.meta.env.DEV ? 'http://127.0.0.1:8787' : '';
 
