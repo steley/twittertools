@@ -191,6 +191,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
 
 <script>
   import { extractTweetId, fetchThread, wireMediaImg, type TweetData } from '../lib/api';
+  import { bookmarkToggleButton, type BookmarkItem } from '../lib/bookmark-store';
 
   const tabUrl = document.getElementById('tr-tab-url') as HTMLButtonElement;
   const tabPaste = document.getElementById('tr-tab-paste') as HTMLButtonElement;
@@ -224,6 +225,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
 
   let thread: SimpleTweet[] = [];
   let threadTitle = '';
+  let threadSaveBtn: HTMLButtonElement | null = null;
 
   // --- mode switching -------------------------------------------------------
   function setMode(mode: 'url' | 'paste') {
@@ -315,6 +317,15 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     return wrap;
   }
 
+  /** First photo across the thread, used as the saved snapshot's thumbnail. */
+  function firstPostThumb(tweets: TweetData[]): string {
+    for (const p of tweets) {
+      const photo = p.media.find((m) => m.type === 'photo');
+      if (photo) return photo.url;
+    }
+    return '';
+  }
+
   /** Justified photo rows: images in a row share one height and each width
    * follows its natural aspect (flex-grow = w/h once loaded), so nothing is
    * cropped and no letterbox bars appear. Two per row; a leftover image
@@ -383,6 +394,24 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
         ? `Thread by ${first.user.name} (@${first.user.screenName})`
         : 'Thread';
       render();
+      // one-click "save the whole thread" into the local bookmark library
+      if (first) {
+        const snapshot: BookmarkItem = {
+          id: first.id,
+          url: first.url,
+          author: first.user?.name ?? '',
+          handle: first.user?.screenName ?? '',
+          text: data.tweets.map((p) => p.text).join('\n\n'),
+          mediaType: 'thread',
+          thumb: firstPostThumb(data.tweets),
+          savedAt: Date.now(),
+          tags: ['thread'],
+          note: `${data.tweets.length} post${data.tweets.length > 1 ? 's' : ''}`,
+        };
+        threadSaveBtn?.remove();
+        threadSaveBtn = bookmarkToggleButton(snapshot);
+        actions.prepend(threadSaveBtn);
+      }
       if (data.partial && data.tweets.length <= 1) {
         partialBox.textContent =
           "Couldn't follow the reply chain for this post (X's embed endpoint doesn't expose it). Copy the thread text and use the Paste mode instead — all exports still work.";

@@ -135,6 +135,7 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').sl
 
 <script>
   import type { TweetData } from '../lib/api';
+  import { bookmarkToggleButton, tweetToBookmark } from '../lib/bookmark-store';
   import { el, renderTweetHeader, wireFetcher } from '../lib/media-page';
   import { downloadCard, renderTweetCard, type CardThemeName } from '../lib/tweet-card';
 
@@ -211,6 +212,9 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').sl
         text.textContent = t.text;
         card.appendChild(text);
       }
+      const actions = el('div', 'mt-3');
+      actions.appendChild(bookmarkToggleButton(tweetToBookmark(t)));
+      card.appendChild(actions);
       tweetBox.replaceChildren(card);
       draw();
     },

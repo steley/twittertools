@@ -1,0 +1,488 @@
+---
+import Base from '../layouts/Base.astro';
+import ToolHero from '../components/ToolHero.astro';
+import Faq from '../components/Faq.astro';
+import AdSlot from '../components/AdSlot.astro';
+import { TOOLS } from '../lib/tools';
+
+const faq = [
+  {
+    q: 'Where are my bookmarks stored?',
+    a: "In your browser's IndexedDB, on this device only. Nothing is uploaded — there is no account, no sync and no server copy. Use the JSON export as a backup or to move your library to another browser.",
+  },
+  {
+    q: 'Can I import my X bookmarks?',
+    a: "X doesn't expose bookmarks to any free API, so there is no automatic sync. You can import a bookmarks file from your X data archive (if your archive contains one), paste post URLs in bulk, or bring a TwitterTools JSON export.",
+  },
+  {
+    q: 'What gets saved with a bookmark?',
+    a: 'A snapshot: the full text, author, a thumbnail and the original link. If the post is later deleted, your snapshot keeps it readable — that is the point of a bookmark manager.',
+  },
+  {
+    q: 'How do I add posts from the other tools?',
+    a: 'Every tool (Video Downloader, Image Downloader, Thread Reader, Screenshot Generator) has a Save button on its result. One click stores the post here.',
+  },
+  {
+    q: 'Can I export for Notion or Obsidian?',
+    a: 'Yes. The Markdown export writes one section per post with the full text, link, tags and your notes — it pastes cleanly into any notes app. JSON keeps everything, including notes and tags, for re-import.',
+  },
+];
+
+const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
+---
+
+<Base
+  title="Bookmark Manager — Save X Posts to a Private Local Library | Free"
+  description="Collect X (Twitter) posts into a private bookmark library stored in your browser. Add from any tool or by URL, organise with tags and notes, export to JSON or Markdown. Free, no sign-up."
+  path="/bookmark-manager"
+>
+  <ToolHero
+    title="X (Twitter) Bookmark Manager"
+    subtitle="Collect posts from any tool into a private library stored in your browser. Tag, annotate, export to JSON or Markdown — free, no account, nothing leaves your device."
+  />
+
+  <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+    <h2 class="font-semibold">Add posts by URL</h2>
+    <p class="mt-1 text-sm text-slate-500">One link per line, up to 50 at a time.</p>
+    <form id="bm-form" class="mt-3 flex flex-col gap-3">
+      <textarea
+        id="bm-urls"
+        rows="3"
+        class="w-full rounded-xl border border-slate-300 px-4 py-3 font-mono text-sm focus:border-brand focus:outline-none"
+        placeholder="https://x.com/username/status/1234567890123456789"
+        spellcheck="false"
+      ></textarea>
+      <div class="flex items-center gap-3">
+        <button
+          type="submit"
+          id="bm-add"
+          class="rounded-xl bg-brand px-8 py-3 text-sm font-semibold text-white transition hover:bg-brand-dark disabled:opacity-50"
+        >
+          Add
+        </button>
+        <span id="bm-progress" class="text-sm text-slate-500"></span>
+      </div>
+    </form>
+  </section>
+
+  <section class="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-4">
+    <button id="bm-export-json" class="rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">
+      Export JSON
+    </button>
+    <button id="bm-export-md" class="rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">
+      Export Markdown
+    </button>
+    <label class="cursor-pointer rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white hover:bg-brand-dark">
+      Import file…
+      <input id="bm-file" type="file" accept=".json,.js,.txt" class="hidden" />
+    </label>
+    <span class="ml-auto text-xs text-slate-400">Stored locally — export regularly to keep a backup.</span>
+  </section>
+
+  <section class="mt-8">
+    <div class="flex flex-wrap items-center gap-2">
+      <input
+        id="bm-search"
+        type="search"
+        placeholder="Search text, author, tags, notes…"
+        class="min-w-56 flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-brand focus:outline-none"
+      />
+      <div id="bm-types" class="flex flex-wrap gap-1"></div>
+    </div>
+    <div id="bm-tags" class="mt-2 flex flex-wrap gap-1"></div>
+    <p id="bm-empty" class="mt-6 hidden rounded-xl bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+      No bookmarks yet — save posts from any tool's result or paste URLs above.
+    </p>
+    <div id="bm-list" class="mt-4 space-y-3"></div>
+    <button id="bm-clear" class="mt-6 hidden text-xs text-slate-400 underline hover:text-red-500">Delete everything</button>
+  </section>
+
+  <AdSlot />
+
+  <section class="mt-12">
+    <h2 class="text-xl font-bold">A private reading library</h2>
+    <div class="mt-4 grid gap-4 sm:grid-cols-3">
+      <div class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="font-semibold">Snapshots, not just links</p>
+        <p class="mt-1 text-sm text-slate-600">
+          The full text and a thumbnail are stored with every bookmark, so deleted posts stay
+          readable in your library.
+        </p>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="font-semibold">Your device only</p>
+        <p class="mt-1 text-sm text-slate-600">
+          The library lives in your browser's IndexedDB. No account, no tracking, no server copy —
+          the privacy story is the same as every tool here.
+        </p>
+      </div>
+      <div class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="font-semibold">Yours to export</p>
+        <p class="mt-1 text-sm text-slate-600">
+          JSON for backups and re-import, Markdown for Notion and Obsidian. No lock-in — it is your
+          data.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <Faq items={faq} />
+
+  <section class="mt-12">
+    <h2 class="text-xl font-bold">Related tools</h2>
+    <ul class="mt-4 grid gap-3 sm:grid-cols-3">
+      {
+        related.map((t) => (
+          <li>
+            <a href={t.slug} class="block rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium hover:border-brand">
+              {t.name} <span class="text-slate-400">→</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</Base>
+
+<script>
+  import { extractTweetId, fetchTweet, wireMediaImg, type TweetData } from '../lib/api';
+  import {
+    bookmarkToggleButton,
+    clearBookmarks,
+    deleteBookmark,
+    getBookmark,
+    importBookmarks,
+    listBookmarks,
+    normalizeItem,
+    putBookmark,
+    tweetToBookmark,
+    type BookmarkItem,
+    type BookmarkType,
+  } from '../lib/bookmark-store';
+
+  const form = document.getElementById('bm-form') as HTMLFormElement;
+  const urlsBox = document.getElementById('bm-urls') as HTMLTextAreaElement;
+  const addBtn = document.getElementById('bm-add') as HTMLButtonElement;
+  const progress = document.getElementById('bm-progress')!;
+  const searchBox = document.getElementById('bm-search') as HTMLInputElement;
+  const typesBox = document.getElementById('bm-types')!;
+  const tagsBox = document.getElementById('bm-tags')!;
+  const listBox = document.getElementById('bm-list')!;
+  const emptyBox = document.getElementById('bm-empty')!;
+  const clearBtn = document.getElementById('bm-clear') as HTMLButtonElement;
+  const fileInput = document.getElementById('bm-file') as HTMLInputElement;
+
+  const TYPE_LABELS: Record<BookmarkType, string> = {
+    video: 'Video',
+    photo: 'Photo',
+    thread: 'Thread',
+    text: 'Text',
+  };
+
+  let all: BookmarkItem[] = [];
+  let query = '';
+  let typeFilter: BookmarkType | 'all' = 'all';
+  let tagFilter: string | null = null;
+
+  const el = (tag: string, cls?: string): HTMLElement => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    return n;
+  };
+  const safeUrl = (item: BookmarkItem) =>
+    /^https:\/\/(x|twitter)\.com\//.test(item.url) ? item.url : `https://x.com/i/status/${item.id}`;
+  const excerpt = (text: string) => (text.length > 280 ? text.slice(0, 280) + '…' : text);
+
+  // --- filtering ----------------------------------------------------------
+  function visible(): BookmarkItem[] {
+    const q = query.trim().toLowerCase();
+    return all.filter((b) => {
+      if (typeFilter !== 'all' && b.mediaType !== typeFilter) return false;
+      if (tagFilter && !b.tags.includes(tagFilter)) return false;
+      if (!q) return true;
+      return [b.text, b.author, b.handle, b.note, b.tags.join(' ')].join(' ').toLowerCase().includes(q);
+    });
+  }
+
+  // --- rendering ----------------------------------------------------------
+  function renderFilters() {
+    const types: (BookmarkType | 'all')[] = ['all', 'video', 'photo', 'thread', 'text'];
+    typesBox.replaceChildren();
+    for (const t of types) {
+      const count = t === 'all' ? all.length : all.filter((b) => b.mediaType === t).length;
+      const b = el(
+        'button',
+        'rounded-full px-3 py-1.5 text-xs font-medium ' +
+          (typeFilter === t ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')
+      );
+      b.textContent = (t === 'all' ? 'All' : TYPE_LABELS[t]) + ` (${count})`;
+      b.addEventListener('click', () => {
+        typeFilter = t;
+        render();
+      });
+      typesBox.appendChild(b);
+    }
+    const tags = [...new Set(all.flatMap((b) => b.tags))].sort();
+    tagsBox.replaceChildren();
+    if (!tags.length) return;
+    for (const tag of tags) {
+      const chip = el(
+        'button',
+        'rounded-full px-3 py-1 text-xs ' +
+          (tagFilter === tag ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200')
+      );
+      chip.textContent = `#${tag}`;
+      chip.addEventListener('click', () => {
+        tagFilter = tagFilter === tag ? null : tag;
+        render();
+      });
+      tagsBox.appendChild(chip);
+    }
+  }
+
+  function render() {
+    renderFilters();
+    const items = visible();
+    emptyBox.classList.toggle('hidden', items.length > 0);
+    clearBtn.classList.toggle('hidden', all.length === 0);
+    listBox.replaceChildren();
+    for (const item of items) listBox.appendChild(renderItem(item));
+  }
+
+  function renderItem(item: BookmarkItem): HTMLElement {
+    const card = el('article', 'flex gap-4 rounded-2xl border border-slate-200 bg-white p-4');
+
+    if (item.thumb.startsWith('https://')) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.loading = 'lazy';
+      img.className = 'h-20 w-20 shrink-0 rounded-xl bg-slate-100 object-cover';
+      wireMediaImg(img, item.thumb, 'bookmark-thumb');
+      card.appendChild(img);
+    }
+
+    const main = el('div', 'min-w-0 flex-1');
+    const meta = el('div', 'flex flex-wrap items-center gap-2 text-xs text-slate-400');
+    const typeBadge = el('span', 'rounded-full bg-sky-50 px-2 py-0.5 font-semibold text-brand');
+    typeBadge.textContent = TYPE_LABELS[item.mediaType];
+    meta.appendChild(typeBadge);
+    if (item.handle) meta.append(document.createTextNode('@' + item.handle));
+    meta.append(document.createTextNode(new Date(item.savedAt).toISOString().slice(0, 10)));
+    main.appendChild(meta);
+
+    const text = el('p', 'mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-slate-700');
+    text.textContent = excerpt(item.text);
+    main.appendChild(text);
+
+    if (item.tags.length) {
+      const tagRow = el('div', 'mt-2 flex flex-wrap gap-1');
+      for (const tag of item.tags) {
+        const chip = el('span', 'rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500');
+        chip.textContent = '#' + tag;
+        tagRow.appendChild(chip);
+      }
+      main.appendChild(tagRow);
+    }
+    if (item.note) {
+      const note = el('p', 'mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800');
+      note.textContent = item.note;
+      main.appendChild(note);
+    }
+
+    const actions = el('div', 'mt-3 flex flex-wrap items-center gap-2');
+    const open = el('a', 'rounded-full border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand');
+    (open as HTMLAnchorElement).href = safeUrl(item);
+    (open as HTMLAnchorElement).target = '_blank';
+    (open as HTMLAnchorElement).rel = 'noopener noreferrer';
+    open.textContent = 'Open on X ↗';
+    actions.appendChild(open);
+    const edit = el('button', 'rounded-full border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand');
+    edit.textContent = 'Edit';
+    actions.appendChild(edit);
+    const del = el('button', 'rounded-full border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-red-400 hover:text-red-500');
+    del.textContent = 'Delete';
+    del.addEventListener('click', async () => {
+      await deleteBookmark(item.id);
+      all = all.filter((b) => b.id !== item.id);
+      render();
+    });
+    actions.appendChild(del);
+    main.appendChild(actions);
+
+    const panel = el('div', 'mt-3 hidden space-y-2');
+    const tagInput = el('input', 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none') as HTMLInputElement;
+    tagInput.placeholder = 'Add a tag and press Enter';
+    tagInput.value = '';
+    tagInput.addEventListener('keydown', async (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const tag = tagInput.value.trim().replace(/^#/, '');
+      if (!tag || item.tags.includes(tag)) return;
+      item.tags.push(tag);
+      await putBookmark(item);
+      render();
+    });
+    panel.appendChild(tagInput);
+    const noteArea = el('textarea', 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none') as HTMLTextAreaElement;
+    noteArea.rows = 2;
+    noteArea.placeholder = 'Your note…';
+    noteArea.value = item.note;
+    let noteTimer: ReturnType<typeof setTimeout> | undefined;
+    noteArea.addEventListener('input', () => {
+      clearTimeout(noteTimer);
+      noteTimer = setTimeout(() => {
+        item.note = noteArea.value;
+        putBookmark(item);
+      }, 600);
+    });
+    panel.appendChild(noteArea);
+    edit.addEventListener('click', () => panel.classList.toggle('hidden'));
+    main.appendChild(panel);
+
+    card.appendChild(main);
+    return card;
+  }
+
+  // --- add by URL -----------------------------------------------------------
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const ids: string[] = [];
+    for (const line of urlsBox.value.split('\n')) {
+      const id = extractTweetId(line);
+      if (id && !ids.includes(id)) ids.push(id);
+    }
+    if (!ids.length) {
+      progress.textContent = "No valid post links found — paste x.com/…/status/… links, one per line.";
+      return;
+    }
+    const batch = ids.slice(0, 50);
+    addBtn.disabled = true;
+    let added = 0;
+    let dup = 0;
+    let failed = 0;
+    for (let i = 0; i < batch.length; i++) {
+      progress.textContent = `Fetching ${i + 1}/${batch.length}…`;
+      try {
+        if (await getBookmark(batch[i])) {
+          dup++;
+        } else {
+          const t = await fetchTweet(batch[i]);
+          await putBookmark(tweetToBookmark(t));
+          added++;
+        }
+      } catch {
+        failed++;
+      }
+      await new Promise((r) => setTimeout(r, 1100)); // stay well under the API rate limit
+    }
+    urlsBox.value = '';
+    progress.textContent = `Added ${added}${dup ? `, ${dup} already saved` : ''}${failed ? `, ${failed} failed` : ''}.`;
+    addBtn.disabled = false;
+    all = await listBookmarks();
+    render();
+  });
+
+  // --- exports --------------------------------------------------------------
+  function download(filename: string, content: string, type: string) {
+    const blob = new Blob([content], { type });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  document.getElementById('bm-export-json')!.addEventListener('click', () => {
+    const payload = { version: 1, exportedAt: new Date().toISOString(), bookmarks: all };
+    download(
+      `twittertools-bookmarks-${new Date().toISOString().slice(0, 10)}.json`,
+      JSON.stringify(payload, null, 2),
+      'application/json'
+    );
+  });
+
+  document.getElementById('bm-export-md')!.addEventListener('click', () => {
+    const parts = all.map((b, i) => {
+      const head = `### ${i + 1}. ${b.author || '@' + b.handle} · ${TYPE_LABELS[b.mediaType]} · ${new Date(b.savedAt).toISOString().slice(0, 10)}`;
+      const tags = b.tags.length ? `\n\nTags: ${b.tags.map((t) => '#' + t).join(', ')}` : '';
+      const note = b.note ? `\n\n> ${b.note.replace(/\n/g, '\n> ')}` : '';
+      return `${head}\n\n${b.text}\n\n${safeUrl(b)}${tags}${note}`;
+    });
+    const md =
+      `# My X Bookmarks\n\n> Exported from twittertools.com — ${new Date().toISOString().slice(0, 10)}\n\n` +
+      parts.join('\n\n---\n\n') +
+      '\n';
+    download(`twittertools-bookmarks-${new Date().toISOString().slice(0, 10)}.md`, md, 'text/markdown');
+  });
+
+  // --- import ----------------------------------------------------------------
+  async function fetchMetaForIds(ids: string[]): Promise<BookmarkItem[]> {
+    const out: BookmarkItem[] = [];
+    for (let i = 0; i < ids.length; i++) {
+      progress.textContent = `Fetching metadata ${i + 1}/${ids.length}…`;
+      try {
+        const t: TweetData = await fetchTweet(ids[i]);
+        out.push(tweetToBookmark(t));
+      } catch {
+        /* deleted / protected — skip */
+      }
+      await new Promise((r) => setTimeout(r, 1100));
+    }
+    return out;
+  }
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    progress.textContent = 'Parsing…';
+    try {
+      if (/window\.YTD/.test(text)) {
+        // X data archive format: entries carry only tweetIds — resolve via the API
+        const ids = [...text.matchAll(/"tweetId"\s*:\s*"(\d+)"/g)].map((m) => m[1]);
+        const unique = [...new Set(ids)].slice(0, 50);
+        if (!unique.length) {
+          progress.textContent = 'No bookmark entries found in that archive file.';
+          return;
+        }
+        const items = await fetchMetaForIds(unique);
+        const added = await importBookmarks(items);
+        progress.textContent = `Imported ${added} from the archive${ids.length > 50 ? ' (first 50 — repeat with the remaining ones)' : ''}.`;
+      } else {
+        const parsed = JSON.parse(text);
+        const items = Array.isArray(parsed) ? parsed : Array.isArray(parsed?.bookmarks) ? parsed.bookmarks : null;
+        if (!items) {
+          progress.textContent = 'Unrecognised file — expected a TwitterTools JSON export.';
+          return;
+        }
+        const added = await importBookmarks(items);
+        progress.textContent = `Imported ${added}${items.length > added ? ` (${items.length - added} duplicates skipped)` : ''}.`;
+      }
+      all = await listBookmarks();
+      render();
+    } catch {
+      progress.textContent = 'Could not read that file.';
+    } finally {
+      fileInput.value = '';
+    }
+  });
+
+  clearBtn.addEventListener('click', async () => {
+    if (!confirm('Delete every bookmark on this device? Export first if you want a backup.')) return;
+    await clearBookmarks();
+    all = [];
+    tagFilter = null;
+    render();
+  });
+
+  searchBox.addEventListener('input', () => {
+    query = searchBox.value;
+    render();
+  });
+
+  all = await listBookmarks();
+  render();
+</script>

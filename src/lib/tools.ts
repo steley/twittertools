@@ -44,6 +44,13 @@ export const TOOLS: Tool[] = [
     icon: svg('<path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" />'),
   },
   {
+    slug: '/bookmark-manager',
+    name: 'Bookmark Manager',
+    tagline: 'Collect posts from any tool into a private, local library — export anytime.',
+    category: 'read',
+    icon: svg('<path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />'),
+  },
+  {
     slug: '/twitter-advanced-search-builder',
     name: 'Advanced Search Builder',
     tagline: 'Build X search queries with a form — no operators to memorize.',
