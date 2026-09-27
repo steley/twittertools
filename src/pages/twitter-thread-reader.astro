@@ -95,6 +95,11 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
 
     <div id="tr-error" class="mt-4 hidden rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600"></div>
     <div id="tr-partial" class="mt-4 hidden rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700"></div>
+    <div id="tr-single-hint" class="mt-4 hidden rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-800">
+      Only got one post? If this is the <strong>start</strong> of a thread, paste the link to the
+      <strong>last</strong> post instead — the reader unrolls threads backwards and needs a post
+      that has replies above it.
+    </div>
 
     <div id="tr-actions" class="mt-5 hidden flex-wrap items-center gap-2">
       <button data-tr-export="copy" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Copy all</button>
@@ -198,8 +203,15 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
   const textarea = document.getElementById('tr-text') as HTMLTextAreaElement;
   const errorBox = document.getElementById('tr-error')!;
   const partialBox = document.getElementById('tr-partial')!;
+  const singleHint = document.getElementById('tr-single-hint')!;
   const actions = document.getElementById('tr-actions')!;
   const tweetsEl = document.getElementById('tr-tweets')!;
+
+  interface SimpleMedia {
+    poster: string;
+    label: string; // 'Video' | 'GIF'
+    postUrl?: string;
+  }
 
   interface SimpleTweet {
     text: string;
@@ -207,6 +219,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     handle?: string;
     date?: string;
     images?: string[];
+    media?: SimpleMedia[]; // videos / GIFs: poster thumbnail, linked out to X
   }
 
   let thread: SimpleTweet[] = [];
@@ -271,8 +284,35 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       card.appendChild(body);
 
       if (t.images?.length) card.appendChild(buildImages(t.images));
+      for (const m of t.media ?? []) card.appendChild(buildVideoCard(m));
       tweetsEl.appendChild(card);
     });
+  }
+
+  /** Videos and GIFs are not inlined (heavy files, and X's CDN is
+   * unreachable on some networks): show the poster thumbnail with a badge
+   * that opens the post on X, where the clip plays. */
+  function buildVideoCard(m: SimpleMedia): HTMLElement {
+    const wrap = el(m.postUrl ? 'a' : 'div', 'relative mt-3 block overflow-hidden rounded-lg bg-slate-100');
+    if (m.postUrl) {
+      const a = wrap as HTMLAnchorElement;
+      a.href = m.postUrl;
+      a.target = '_blank';
+      a.rel = 'noopener noreferrer';
+    }
+    const img = document.createElement('img');
+    img.alt = `${m.label} thumbnail`;
+    img.loading = 'lazy';
+    img.className = 'max-h-80 w-full object-contain';
+    wireMediaImg(img, m.poster, 'thread-video');
+    wrap.appendChild(img);
+    const badge = el(
+      'span',
+      'absolute left-3 top-3 rounded-full bg-black/70 px-2.5 py-1 text-xs font-medium text-white'
+    );
+    badge.textContent = m.postUrl ? `${m.label} · watch on X ↗` : m.label;
+    wrap.appendChild(badge);
+    return wrap;
   }
 
   /** Justified photo rows: images in a row share one height and each width
@@ -309,6 +349,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
   function hideMessages() {
     errorBox.classList.add('hidden');
     partialBox.classList.add('hidden');
+    singleHint.classList.add('hidden');
   }
 
   form.addEventListener('submit', async (e) => {
@@ -329,6 +370,13 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
         handle: t.user?.screenName,
         date: t.createdAt?.slice(0, 10),
         images: t.media.filter((m) => m.type === 'photo').map((m) => m.url),
+        media: t.media
+          .filter((m) => m.type === 'video' || m.type === 'animated_gif')
+          .map((m) => ({
+            poster: m.url,
+            label: m.type === 'animated_gif' ? 'GIF' : 'Video',
+            postUrl: t.url,
+          })),
       }));
       const first = data.tweets[0];
       threadTitle = first?.user?.screenName
@@ -342,6 +390,8 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       } else if (data.partial) {
         partialBox.textContent = 'Partially unrolled: some posts in the chain were unavailable (deleted or protected).';
         partialBox.classList.remove('hidden');
+      } else if (data.tweets.length === 1) {
+        singleHint.classList.remove('hidden');
       }
     } catch (err) {
       showError(
@@ -388,7 +438,20 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
   function markdown(): string {
     const n = thread.length;
     const head = `# ${threadTitle}\n\n> Unrolled with TwitterTools — twittertools.com\n`;
-    return head + '\n' + thread.map((t, i) => `**${i + 1}/${n}**\n\n${t.text}`).join('\n\n---\n\n') + '\n';
+    return (
+      head +
+      '\n' +
+      thread
+        .map((t, i) => {
+          const media = (t.media ?? [])
+            .map((m) => (m.postUrl ? `[${m.label} — watch on X](${m.postUrl})` : `[${m.label}]`))
+            .map((line) => `\n\n${line}`)
+            .join('');
+          return `**${i + 1}/${n}**\n\n${t.text}${media}`;
+        })
+        .join('\n\n---\n\n') +
+      '\n'
+    );
   }
   function htmlDoc(): string {
     const esc = (s: string) =>
@@ -399,10 +462,19 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
         const imgs = (t.images ?? [])
           .map((src) => `<img src="${esc(src)}" alt="" referrerpolicy="no-referrer" loading="lazy">`)
           .join('');
-        return `<article><h2>${i + 1}/${thread.length} ${who}</h2><p>${esc(t.text).replace(/\n/g, '<br>')}</p>${imgs}</article>`;
+        const vids = (t.media ?? [])
+          .map((m) => {
+            const img = `<img src="${esc(m.poster)}" alt="${esc(m.label)}" referrerpolicy="no-referrer" loading="lazy">`;
+            const tag = `<span class="tag">${esc(m.postUrl ? `${m.label} — watch on X ↗` : m.label)}</span>`;
+            return m.postUrl
+              ? `<a class="vid" href="${esc(m.postUrl)}" target="_blank" rel="noopener noreferrer">${img}${tag}</a>`
+              : `<span class="vid">${img}${tag}</span>`;
+          })
+          .join('');
+        return `<article><h2>${i + 1}/${thread.length} ${who}</h2><p>${esc(t.text).replace(/\n/g, '<br>')}</p>${imgs}${vids}</article>`;
       })
       .join('\n');
-    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(threadTitle)}</title><style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem;color:#0f1419}article{border:1px solid #e2e8f0;border-radius:12px;padding:1rem;margin-bottom:1rem}h2{font-size:.9rem;margin:0 0 .5rem}h2 .who{font-weight:400;color:#64748b;margin-left:.5rem}p{line-height:1.6;white-space:pre-wrap;margin:0}img{max-width:100%;border-radius:8px;margin-top:.5rem}footer{color:#94a3b8;font-size:.8rem;margin-top:2rem}</style></head><body><h1>${esc(threadTitle)}</h1>${items}<footer>Unrolled with <a href="https://twittertools.com">TwitterTools</a></footer></body></html>`;
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(threadTitle)}</title><style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem;color:#0f1419}article{border:1px solid #e2e8f0;border-radius:12px;padding:1rem;margin-bottom:1rem}h2{font-size:.9rem;margin:0 0 .5rem}h2 .who{font-weight:400;color:#64748b;margin-left:.5rem}p{line-height:1.6;white-space:pre-wrap;margin:0}img{max-width:100%;border-radius:8px;margin-top:.5rem}.vid{position:relative;display:block;margin-top:.5rem}.vid img{margin-top:0}.vid .tag{position:absolute;left:.75rem;top:.75rem;background:rgba(0,0,0,.65);color:#fff;font-size:.75rem;padding:.2rem .6rem;border-radius:9999px}footer{color:#94a3b8;font-size:.8rem;margin-top:2rem}</style></head><body><h1>${esc(threadTitle)}</h1>${items}<footer>Unrolled with <a href="https://twittertools.com">TwitterTools</a></footer></body></html>`;
   }
 
   function download(filename: string, content: string, type: string) {
