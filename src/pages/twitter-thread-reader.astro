@@ -8,11 +8,11 @@ import { TOOLS } from '../lib/tools';
 const faq = [
   {
     q: 'How does the thread reader work?',
-    a: 'Paste a link to any post in a thread and TwitterTools follows the reply chain upwards to collect every post, then shows the whole thread on one clean page. When the free embed endpoint can\'t provide the chain, switch to Paste mode and drop the text in yourself — all reading and export features still work.',
+    a: 'Paste a link to any post in a thread and TwitterTools follows the reply chain backwards to collect every post, then shows the whole thread on one clean page — which is why the last post of a thread gives the best results. When the free embed endpoint can\'t provide the chain, switch to Paste mode and drop the text in yourself — all reading and export features still work.',
   },
   {
     q: 'Can I export a thread as Markdown?',
-    a: 'Yes — one click gives you a .md file with every post numbered, ready for Notion, Obsidian, GitHub or any static-site generator. TXT and standalone HTML exports are there too, and the PDF export opens your browser\'s print dialog — choose "Save as PDF".',
+    a: 'Yes — one click gives you a .md file with every post numbered, photos embedded as images and videos linked, ready for Notion, Obsidian, GitHub or any static-site generator. TXT and standalone HTML exports are there too, and the PDF export opens your browser\'s print dialog — choose "Save as PDF".',
   },
   {
     q: 'Do I need to log in to X?',
@@ -149,8 +149,8 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
         <p class="text-sm font-bold text-brand">Step 1</p>
         <p class="mt-1 font-medium">Get the thread</p>
         <p class="mt-1 text-sm text-slate-600">
-          Copy the link to any post in the thread. Only have the text? Switch to the Paste mode
-          instead.
+          Copy the link to any post in the thread — the reader walks the reply chain backwards, so
+          the last post works best. Only have the text? Switch to the Paste mode instead.
         </p>
       </li>
       <li class="rounded-2xl border border-slate-200 bg-white p-5">

@@ -11,7 +11,7 @@ export interface Tool {
 
 export const CATEGORY_LABELS: Record<ToolCategory, { title: string; blurb: string }> = {
   download: { title: 'Download Tools', blurb: 'Save videos, GIFs and photos from public posts.' },
-  read: { title: 'Reader & Research', blurb: 'Unroll threads and build advanced X searches without learning operators.' },
+  read: { title: 'Reader & Research', blurb: 'Unroll threads, save posts to a private library, build searches without operators.' },
   write: { title: 'Writing', blurb: 'Get the character count right before you post.' },
   create: { title: 'Create & Share', blurb: 'Turn public posts into polished images you can share anywhere.' },
   dev: { title: 'Developer', blurb: 'Parse post URLs and Snowflake IDs by hand.' },

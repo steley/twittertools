@@ -2,20 +2,23 @@
 
 **The independent toolkit for X (Twitter).** Static Astro site + one tiny Python API.
 
-V1 ships six free, no-login tools:
+V1 ships eight free, no-login tools:
 
 | Path | Tool | Backend? |
 | --- | --- | --- |
-| `/twitter-video-downloader` | Video/GIF → MP4 in available qualities | yes (`/api/tweet`, `/api/download`) |
+| `/twitter-video-downloader` | Video/GIF → MP4 in available qualities (direct CDN download, proxy fallback) | yes (`/api/tweet`, `/api/download`) |
 | `/twitter-image-downloader` | Photos in original resolution, one or all | yes (`/api/tweet`, `/api/download`) |
-| `/twitter-thread-reader` | Unroll threads, export Markdown/TXT/HTML, paste-mode fallback | yes (`/api/thread`, best-effort) |
+| `/twitter-thread-reader` | Unroll threads, photos in exports, export Markdown/TXT/HTML/PDF, paste-mode fallback | yes (`/api/thread`, best-effort) |
+| `/bookmark-manager` | Private local bookmark library (IndexedDB), tags/notes, JSON & Markdown export | no |
+| `/tweet-screenshot-generator` | Post → polished PNG card, light/dark, rendered on canvas | no |
 | `/tweet-character-counter` | X weighted counting (CJK ×2, links = 23) | no |
 | `/tweet-url-parser` | URL ↔ ID ↔ Snowflake timestamp | no |
 | `/twitter-advanced-search-builder` | GUI → search operators → open on X | no |
 
 ```
-├── src/pages/          6 tool pages + home + privacy + terms (Astro + Tailwind v4)
-├── src/lib/            shared modules: tweet-count, snowflake, api client, tool registry
+├── src/pages/          8 tool pages + home + privacy + terms (Astro + Tailwind v4)
+├── src/lib/            shared modules: api client (incl. guest GraphQL fallback), tweet card
+│                       renderer, bookmark store, tweet-count, snowflake, tool registry
 ├── server/             downloader_server.py (aiohttp) + systemd unit + mock/dev tooling
 ├── deploy/             Apache vhost (current VPS) + nginx config (alternative)
 ├── scripts/gen_og.py   regenerates public/og.png (social card)
@@ -215,16 +218,6 @@ sudo nginx -t && sudo systemctl reload nginx
 6. **Ads** — apply for AdSense once indexed; paste the snippet into `AdSlot.astro`, rebuild.
 7. **Ongoing** — check the downloader against a known video tweet weekly; the syndication
    endpoint is undocumented and X can change it without notice.
-
-## Roadmap
-
-- **V2 — accounts & saving** (needs OAuth + paid X API; costed before building):
-  Bookmark Manager/Exporter, profile & tweet analytics, Thread → Markdown pipeline.
-- **V3 — monetization**: Free / Pro $9 (unlimited exports, advanced search, analytics) /
-  Power $19 (AI bookmark search, bulk processing), `api.twittertools.com` for developers —
-  same "site acquires, API monetizes" split as Opus.
-- Quick wins: more thin SEO pages off the existing backend (GIF downloader, bulk tweet
-  text extractor), hreflang when going multi-language.
 
 ## Trademark note
 
