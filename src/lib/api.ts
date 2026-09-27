@@ -105,3 +105,30 @@ export function wireMediaImg(img: HTMLImageElement, mediaUrl: string, filename: 
     if (!img.complete || !img.naturalWidth) swap();
   }, timeoutMs);
 }
+
+/** Try to save a media file straight from X's CDN via a CORS fetch (fast for
+ * the user, no origin bandwidth). Resolves false when the CDN is unreachable
+ * or blocked — callers should then fall back to the same-origin proxy. The
+ * abort timer only covers connection+headers; once the CDN starts streaming
+ * the body runs to completion without a timeout. */
+export async function downloadViaCdn(directUrl: string, filename: string, timeoutMs = 8000): Promise<boolean> {
+  try {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), timeoutMs);
+    const res = await fetch(directUrl, { signal: ctl.signal });
+    clearTimeout(timer);
+    if (!res.ok) return false;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    return true;
+  } catch {
+    return false;
+  }
+}
