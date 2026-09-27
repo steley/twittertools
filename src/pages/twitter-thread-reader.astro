@@ -443,10 +443,14 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       '\n' +
       thread
         .map((t, i) => {
-          const media = (t.media ?? [])
-            .map((m) => (m.postUrl ? `[${m.label} — watch on X](${m.postUrl})` : `[${m.label}]`))
-            .map((line) => `\n\n${line}`)
-            .join('');
+          // photos embed as standard Markdown images (permanent CDN links);
+          // videos/GIFs become links, since .md files can't carry video
+          const media = [
+            ...(t.images ?? []).map((src) => `\n\n![media](${src})`),
+            ...(t.media ?? []).map((m) =>
+              m.postUrl ? `\n\n[${m.label} — watch on X](${m.postUrl})` : `\n\n[${m.label}]`
+            ),
+          ].join('');
           return `**${i + 1}/${n}**\n\n${t.text}${media}`;
         })
         .join('\n\n---\n\n') +
