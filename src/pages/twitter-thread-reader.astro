@@ -55,6 +55,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       <form id="tr-form" class="flex flex-col gap-3 sm:flex-row">
         <input
           id="tr-url"
+          aria-label="Post URL"
           type="text"
           inputmode="url"
           class="w-full flex-1 rounded-xl border border-slate-300 px-4 py-3 font-mono text-sm focus:border-brand focus:outline-none"
@@ -70,7 +71,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
           Unroll
         </button>
       </form>
-      <p class="mt-2 text-xs text-slate-400">
+      <p class="mt-2 text-xs text-slate-500">
         Best-effort via X's free embed endpoint. If a thread can't be unrolled, use the Paste mode.
       </p>
     </div>
@@ -81,6 +82,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       </label>
       <textarea
         id="tr-text"
+          aria-label="Thread text"
         rows="8"
         class="w-full rounded-xl border border-slate-300 p-4 font-mono text-sm leading-relaxed focus:border-brand focus:outline-none"
         placeholder={'First post of my thread...\n---\nSecond post, more detail...\n---\nWrapping up!'}
@@ -214,12 +216,18 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     postUrl?: string;
   }
 
+  interface SimpleImage {
+    src: string;
+    w?: number;
+    h?: number;
+  }
+
   interface SimpleTweet {
     text: string;
     author?: string;
     handle?: string;
     date?: string;
-    images?: string[];
+    images?: SimpleImage[];
     media?: SimpleMedia[]; // videos / GIFs: poster thumbnail, linked out to X
   }
 
@@ -270,12 +278,12 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       num.textContent = `${i + 1}/${thread.length}`;
       head.appendChild(num);
       if (t.handle) {
-        const who = el('span', 'text-xs text-slate-400');
+        const who = el('span', 'text-xs text-slate-500');
         who.textContent = t.author ? `${t.author} (@${t.handle})` : `@${t.handle}`;
         head.appendChild(who);
       }
       if (t.date) {
-        const when = el('span', 'ml-auto text-xs text-slate-400');
+        const when = el('span', 'ml-auto text-xs text-slate-500');
         when.textContent = t.date;
         head.appendChild(when);
       }
@@ -330,18 +338,20 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
    * follows its natural aspect (flex-grow = w/h once loaded), so nothing is
    * cropped and no letterbox bars appear. Two per row; a leftover image
    * renders full width. */
-  function buildImages(srcs: string[]): HTMLElement {
+  function buildImages(imgs: NonNullable<SimpleTweet['images']>): HTMLElement {
     const wrap = el('div', 'mt-3 space-y-2');
-    for (let i = 0; i < srcs.length; i += 2) {
+    for (let i = 0; i < imgs.length; i += 2) {
       const div = el('div', 'flex gap-2');
-      for (const src of srcs.slice(i, i + 2)) {
+      for (const info of imgs.slice(i, i + 2)) {
         const img = document.createElement('img');
         img.alt = 'Thread media';
         img.loading = 'lazy';
         img.className = 'min-w-0 rounded-lg bg-slate-100';
         img.style.flex = '1 1 0%';
         img.style.height = 'auto';
-        wireMediaImg(img, src, 'thread-media');
+        // reserve the box before the pixels arrive: no layout jump
+        if (info.w && info.h) img.style.aspectRatio = `${info.w} / ${info.h}`;
+        wireMediaImg(img, info.src, 'thread-media');
         img.addEventListener('load', () => {
           img.style.flexGrow = String(img.naturalWidth / (img.naturalHeight || 1));
         });
@@ -380,7 +390,9 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
         author: t.user?.name,
         handle: t.user?.screenName,
         date: t.createdAt?.slice(0, 10),
-        images: t.media.filter((m) => m.type === 'photo').map((m) => m.url),
+        images: t.media
+          .filter((m) => m.type === 'photo')
+          .map((m) => ({ src: m.url, w: m.width, h: m.height })),
         media: t.media
           .filter((m) => m.type === 'video' || m.type === 'animated_gif')
           .map((m) => ({
@@ -475,7 +487,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
           // photos embed as standard Markdown images (permanent CDN links);
           // videos/GIFs become links, since .md files can't carry video
           const media = [
-            ...(t.images ?? []).map((src) => `\n\n![media](${src})`),
+            ...(t.images ?? []).map((im) => `\n\n![media](${im.src})`),
             ...(t.media ?? []).map((m) =>
               m.postUrl ? `\n\n[${m.label} — watch on X](${m.postUrl})` : `\n\n[${m.label}]`
             ),
@@ -493,7 +505,10 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       .map((t, i) => {
         const who = t.handle ? `<span class="who">${esc(t.author ?? '')} (@${esc(t.handle)})</span>` : '';
         const imgs = (t.images ?? [])
-          .map((src) => `<img src="${esc(src)}" alt="" referrerpolicy="no-referrer" loading="lazy">`)
+          .map(
+            (im) =>
+              `<img src="${esc(im.src)}" alt="" referrerpolicy="no-referrer" loading="lazy"${im.w && im.h ? ` width="${im.w}" height="${im.h}"` : ''}>`
+          )
           .join('');
         const vids = (t.media ?? [])
           .map((m) => {
@@ -507,7 +522,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
         return `<article><h2>${i + 1}/${thread.length} ${who}</h2><p>${esc(t.text).replace(/\n/g, '<br>')}</p>${imgs}${vids}</article>`;
       })
       .join('\n');
-    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(threadTitle)}</title><style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem;color:#0f1419}article{border:1px solid #e2e8f0;border-radius:12px;padding:1rem;margin-bottom:1rem}h2{font-size:.9rem;margin:0 0 .5rem}h2 .who{font-weight:400;color:#64748b;margin-left:.5rem}p{line-height:1.6;white-space:pre-wrap;margin:0}img{max-width:100%;border-radius:8px;margin-top:.5rem}.vid{position:relative;display:block;margin-top:.5rem}.vid img{margin-top:0}.vid .tag{position:absolute;left:.75rem;top:.75rem;background:rgba(0,0,0,.65);color:#fff;font-size:.75rem;padding:.2rem .6rem;border-radius:9999px}footer{color:#94a3b8;font-size:.8rem;margin-top:2rem}</style></head><body><h1>${esc(threadTitle)}</h1>${items}<footer>Unrolled with <a href="https://twittertools.com">TwitterTools</a></footer></body></html>`;
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(threadTitle)}</title><style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem;color:#0f1419}article{border:1px solid #e2e8f0;border-radius:12px;padding:1rem;margin-bottom:1rem}h2{font-size:.9rem;margin:0 0 .5rem}h2 .who{font-weight:400;color:#64748b;margin-left:.5rem}p{line-height:1.6;white-space:pre-wrap;margin:0}img{max-width:100%;height:auto;border-radius:8px;margin-top:.5rem}.vid{position:relative;display:block;margin-top:.5rem}.vid img{margin-top:0}.vid .tag{position:absolute;left:.75rem;top:.75rem;background:rgba(0,0,0,.65);color:#fff;font-size:.75rem;padding:.2rem .6rem;border-radius:9999px}footer{color:#94a3b8;font-size:.8rem;margin-top:2rem}</style></head><body><h1>${esc(threadTitle)}</h1>${items}<footer>Unrolled with <a href="https://twittertools.com">TwitterTools</a></footer></body></html>`;
   }
 
   function download(filename: string, content: string, type: string) {

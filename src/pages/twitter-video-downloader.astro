@@ -45,6 +45,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-video-downloader').slic
     <form id="vd-form" class="flex flex-col gap-3 sm:flex-row">
       <input
         id="vd-url"
+        aria-label="Post URL"
         type="text"
         inputmode="url"
         class="w-full flex-1 rounded-xl border border-slate-300 px-4 py-3 font-mono text-sm focus:border-brand focus:outline-none"
@@ -61,7 +62,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-video-downloader').slic
         Fetch
       </button>
     </form>
-    <p class="mt-2 text-xs text-slate-400">
+    <p class="mt-2 text-xs text-slate-500">
       Works with x.com and twitter.com links. Only public posts can be processed.
     </p>
 

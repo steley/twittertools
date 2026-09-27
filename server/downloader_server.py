@@ -35,6 +35,7 @@ import math
 import os
 import re
 import time
+from contextlib import suppress
 from collections import OrderedDict, defaultdict, deque
 from typing import Any, Deque, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
@@ -64,6 +65,10 @@ USER_AGENT = (
 # failure degrades gracefully to the teaser text.
 GRAPHQL_QUERY_ID = os.environ.get("TT_GRAPHQL_QUERY_ID", "0hWvDhmW8YQ-S_ib3azIrw")
 GUEST_API_ENABLED = os.environ.get("TT_GUEST_API", "1") != "0"
+# Overridable so the mock suite can exercise the whole note-tweet fallback
+# against a local fake (never set in production).
+GUEST_ACTIVATE_URL = os.environ.get("TT_GUEST_ACTIVATE_URL", "https://api.x.com/1.1/guest/activate.json")
+GRAPHQL_BASE = os.environ.get("TT_GRAPHQL_BASE", "https://x.com/i/api/graphql")
 WEB_BEARER_TOKEN = (
     "AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs="
     "1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA"
@@ -309,7 +314,7 @@ async def get_guest_token(session: ClientSession, force: bool = False) -> Option
             return _guest_token
         try:
             async with session.post(
-                "https://api.x.com/1.1/guest/activate.json",
+                GUEST_ACTIVATE_URL,
                 headers={"Authorization": f"Bearer {WEB_BEARER_TOKEN}"},
                 timeout=GRAPHQL_TIMEOUT,
             ) as resp:
@@ -339,7 +344,7 @@ async def _query_tweet_result(session: ClientSession, tweet_id: str, token: str)
     }
     try:
         async with session.get(
-            f"https://x.com/i/api/graphql/{GRAPHQL_QUERY_ID}/TweetResultByRestId",
+            f"{GRAPHQL_BASE}/{GRAPHQL_QUERY_ID}/TweetResultByRestId",
             params=params, headers=headers, timeout=GRAPHQL_TIMEOUT,
         ) as resp:
             if resp.status != 200:
@@ -608,7 +613,11 @@ async def api_download(request: web.Request) -> web.StreamResponse:
     timeout = ClientTimeout(total=None, connect=10, sock_read=30)
     try:
         session = request.app["client_session"]
-        async with session.get(media_url, timeout=timeout, headers={"User-Agent": USER_AGENT}) as upstream:
+        # allow_redirects=False: the host allowlist above is the SSRF guard,
+        # and following a redirect would bypass it.
+        async with session.get(
+            media_url, timeout=timeout, headers={"User-Agent": USER_AGENT}, allow_redirects=False
+        ) as upstream:
             if upstream.status != 200:
                 return json_error(502, f"Media fetch failed ({upstream.status}).")
             content_type = upstream.headers.get("Content-Type", "application/octet-stream")
@@ -630,9 +639,17 @@ async def api_download(request: web.Request) -> web.StreamResponse:
             if length:
                 resp.content_length = int(length)
             await resp.prepare(request)
-            async for chunk in upstream.content.iter_chunked(64 * 1024):
-                await resp.write(chunk)
-            await resp.write_eof()
+            try:
+                async for chunk in upstream.content.iter_chunked(64 * 1024):
+                    await resp.write(chunk)
+                await resp.write_eof()
+            except (ClientError, asyncio.TimeoutError, ConnectionResetError):
+                # Headers are already out, so a JSON error body is impossible
+                # past this point — the client sees a truncated file and can
+                # retry. Close the stream instead of raising on a second
+                # response (which aiohttp cannot send after prepare()).
+                with suppress(Exception):
+                    await resp.write_eof()
             return resp
     except (ClientError, asyncio.TimeoutError):
         return json_error(502, "Media fetch failed — upstream connection error.")

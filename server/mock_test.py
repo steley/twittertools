@@ -69,7 +69,19 @@ FIXTURES = {
     "222222222222222222": tweet_obj("222222222222222222", "photo post", "mockuser", media=PHOTO_MEDIA),
     "333333333333333333": tweet_obj("333333333333333333", "top of a chain", "mockuser", reply_to="222222222222222222"),
     "404444444444444444": None,
+    # long "note" post: syndication returns a teaser + an empty note_tweet,
+    # the full body only exists on the (mocked) guest GraphQL endpoint
+    "666666666666666666": dict(
+        tweet_obj("666666666666666666", "teaser text https://t.co/media123", "mockuser", media=[dict(PHOTO_MEDIA[0], url="https://t.co/media123")]),
+        note_tweet={"note_tweet_results": {"result": {"id": "NoteTweetResults:666"}}},
+    ),
 }
+
+NOTE_FULL_TEXT = "the full body of the note, with a link https://t.co/ghlink"
+NOTE_URL_ENTITIES = [
+    {"url": "https://t.co/ghlink", "expanded_url": "https://github.com/a/b", "indices": [45, 65]}
+]
+graphql_hits = []  # counts note-fallback fetches for assertion
 
 
 async def mock_syndication(request):
@@ -83,6 +95,28 @@ async def mock_syndication(request):
     return web.json_response(data)
 
 
+async def mock_activate(request):
+    graphql_hits.append("activate")
+    return web.json_response({"guest_token": "mock-guest-token"})
+
+
+async def mock_graphql(request):
+    graphql_hits.append("query")
+    variables = json.loads(request.query.get("variables", "{}"))
+    if variables.get("tweetId") == "666666666666666666":
+        return web.json_response({
+            "data": {"tweetResult": {"result": {
+                "__typename": "Tweet",
+                "note_tweet": {"note_tweet_results": {"result": {
+                    "id": "NoteTweetResults:666",
+                    "text": NOTE_FULL_TEXT,
+                    "entity_set": {"urls": NOTE_URL_ENTITIES},
+                }}},
+            }}}
+        })
+    return web.json_response({"errors": [{"message": "not found"}]}, status=404)
+
+
 async def mock_media(request):
     payload = b"FAKEMP4BYTES" * 1000
     return web.Response(body=payload, content_type="video/mp4")
@@ -91,6 +125,8 @@ async def mock_media(request):
 async def _start_mocks():
     app1 = web.Application()
     app1.router.add_get("/tweet-result", mock_syndication)
+    app1.router.add_post("/activate", mock_activate)
+    app1.router.add_get("/graphql/{tail:.*}", mock_graphql)
     runner1 = web.AppRunner(app1)
     await runner1.setup()
     await web.TCPSite(runner1, "127.0.0.1", 8898).start()
@@ -121,7 +157,9 @@ def run_downloader():
         PORT="8787",
         TT_SYNDICATION_URL="http://127.0.0.1:8898/tweet-result",
         TT_MEDIA_HOSTS="127.0.0.1",
-        TT_GUEST_API="0",  # never touch the real guest API from tests
+        # point the note-tweet fallback at the local fake guest API
+        TT_GUEST_ACTIVATE_URL="http://127.0.0.1:8898/activate",
+        TT_GRAPHQL_BASE="http://127.0.0.1:8898/graphql",
     )
     proc = subprocess.Popen([sys.executable, "downloader_server.py"], env=env)
     return proc
@@ -236,6 +274,20 @@ def run_checks():
         headers={"CF-Connecting-IP": rl_ip, "X-Forwarded-For": "198.51.100.9"},
     )
     check("CF-Connecting-IP beats XFF", code == 429, str(code))
+
+    # 11. long-note fallback through the (mocked) guest GraphQL endpoint
+    code, _, body = get("/api/tweet?id=666666666666666666")
+    d = json.loads(body)
+    t = d.get("tweet", {}).get("text", "")
+    check("note fallback 200", code == 200, str(body[:150]))
+    check("note full text", "full body of the note" in t, repr(t[:120]))
+    check("note link expanded", "https://github.com/a/b" in t and "t.co" not in t, repr(t))
+    check("note media link dropped", "media123" not in t, repr(t))
+    check("guest api called once", graphql_hits.count("activate") == 1 and graphql_hits.count("query") >= 1, str(graphql_hits))
+    # second fetch is cached — no new upstream note fetch
+    before = len(graphql_hits)
+    get("/api/tweet?id=666666666666666666")
+    check("note fetch cached", len(graphql_hits) == before)
 
     print()
     if failures:

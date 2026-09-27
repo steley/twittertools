@@ -41,6 +41,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-image-downloader').slic
     <form id="id-form" class="flex flex-col gap-3 sm:flex-row">
       <input
         id="id-url"
+        aria-label="Post URL"
         type="text"
         inputmode="url"
         class="w-full flex-1 rounded-xl border border-slate-300 px-4 py-3 font-mono text-sm focus:border-brand focus:outline-none"
@@ -57,7 +58,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-image-downloader').slic
         Fetch
       </button>
     </form>
-    <p class="mt-2 text-xs text-slate-400">
+    <p class="mt-2 text-xs text-slate-500">
       Works with x.com and twitter.com links. Only public posts can be processed.
     </p>
 
@@ -179,7 +180,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-image-downloader').slic
         card.appendChild(img);
 
         const bar = el('div', 'flex items-center gap-2 px-3 py-2.5');
-        const dims = el('p', 'flex-1 text-xs text-slate-400');
+        const dims = el('p', 'flex-1 text-xs text-slate-500');
         dims.textContent = p.width && p.height ? `${p.width}×${p.height}px source` : 'image';
         bar.appendChild(dims);
         const open = document.createElement('a');

@@ -13,8 +13,17 @@ const WEIGHT_100_RANGES: Array<[number, number]> = [
   [0x2032, 0x2037],
 ];
 
-/** Simplified twitter-text URL regex: http(s) links and www. links. */
+/** http(s) and www. links — unambiguous. */
 const URL_REGEX = /(https?:\/\/[^\s<>"']+|www\.[^\s<>"']+)/gi;
+/**
+ * Scheme-less domains (X counts "x.com/foo" as a link too). The real
+ * twitter-text regex validates every IANA TLD; this approximation covers the
+ * common ones, which is accurate for virtually all real posts.
+ */
+const BARE_DOMAIN_REGEX =
+  /\b(?:[a-z0-9-]+\.)+(?:com|org|net|io|co|dev|app|xyz|me|gov|edu|info|cn|jp|uk|de|fr|ru|br|in|nl|it|es|se|no|fi|ca|au|us)(?:\/[^\s<>"']*)?/gi;
+/** X never includes trailing punctuation in a link. */
+const TRAILING_PUNCT = /[.,;:!?)\]}'"。，！？）、》…]+$/;
 
 const MAX_WEIGHTED = 28_000; // 280 chars x 100
 
@@ -37,12 +46,18 @@ function isWeight100(cp: number): boolean {
 }
 
 export function extractUrls(text: string): string[] {
-  return text.match(URL_REGEX) ?? [];
+  const primary = text.match(URL_REGEX) ?? [];
+  // mask the unambiguous matches, then count scheme-less domains in what's
+  // left so no URL is counted twice
+  const masked = text.replace(URL_REGEX, (m) => '\u0000'.repeat(m.length));
+  const bare = masked.match(BARE_DOMAIN_REGEX) ?? [];
+  return [...primary, ...bare].map((u) => u.replace(TRAILING_PUNCT, '')).filter(Boolean);
 }
 
 export function countTweet(text: string): CountResult {
   const urls = extractUrls(text);
-  const withoutUrls = text.replace(URL_REGEX, '');
+  let withoutUrls = text;
+  for (const u of urls) withoutUrls = withoutUrls.replace(u, '');
 
   let units = urls.length * 2_300; // each link counts as 23 chars
   let codePoints = 0;

@@ -33,6 +33,9 @@ const siteLd = {
     <link rel="icon" type="image/x-icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="sitemap" href="/sitemap-index.xml" />
+    <!-- media thumbnails load from X's CDN on most pages — warm the connections -->
+    <link rel="preconnect" href="https://pbs.twimg.com" />
+    <link rel="preconnect" href="https://video.twimg.com" />
     <meta name="generator" content={Astro.generator} />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="TwitterTools" />

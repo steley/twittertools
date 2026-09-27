@@ -47,6 +47,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     <form id="bm-form" class="mt-3 flex flex-col gap-3">
       <textarea
         id="bm-urls"
+        aria-label="Post URLs, one per line"
         rows="3"
         class="w-full rounded-xl border border-slate-300 px-4 py-3 font-mono text-sm focus:border-brand focus:outline-none"
         placeholder="https://x.com/username/status/1234567890123456789"
@@ -76,13 +77,14 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
       Import file…
       <input id="bm-file" type="file" accept=".json,.js,.txt" class="hidden" />
     </label>
-    <span class="ml-auto text-xs text-slate-400">Stored locally — export regularly to keep a backup.</span>
+    <span class="ml-auto text-xs text-slate-500">Stored locally — export regularly to keep a backup.</span>
   </section>
 
   <section class="mt-8">
     <div class="flex flex-wrap items-center gap-2">
       <input
         id="bm-search"
+        aria-label="Search bookmarks"
         type="search"
         placeholder="Search text, author, tags, notes…"
         class="min-w-56 flex-1 rounded-xl border border-slate-300 px-4 py-2.5 text-sm focus:border-brand focus:outline-none"
@@ -262,7 +264,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     }
 
     const main = el('div', 'min-w-0 flex-1');
-    const meta = el('div', 'flex flex-wrap items-center gap-2 text-xs text-slate-400');
+    const meta = el('div', 'flex flex-wrap items-center gap-2 text-xs text-slate-500');
     const typeBadge = el('span', 'rounded-full bg-sky-50 px-2 py-0.5 font-semibold text-brand');
     typeBadge.textContent = TYPE_LABELS[item.mediaType];
     meta.appendChild(typeBadge);
