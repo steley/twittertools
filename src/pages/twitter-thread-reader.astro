@@ -12,7 +12,7 @@ const faq = [
   },
   {
     q: 'Can I export a thread as Markdown?',
-    a: 'Yes — exports read like a proper article: title, author and date at the top, then the posts flowing as one piece, with photos embedded as images and videos linked. Ready for Notion, Obsidian, GitHub or any static-site generator. TXT and standalone HTML exports are there too, and the PDF export opens your browser\'s print dialog — choose "Save as PDF".',
+    a: 'Yes — exports read like a proper article: title, author and date at the top, then the posts flowing as one piece, with photos embedded as images and videos linked. Any post can be unticked before exporting to drop it (handy for accidental duplicates). Ready for Notion, Obsidian, GitHub or any static-site generator. TXT and standalone HTML exports are there too, and the PDF export opens your browser\'s print dialog — choose "Save as PDF".',
   },
   {
     q: 'Do I need to log in to X?',
@@ -112,6 +112,18 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       <button data-tr-export="pdf" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Export PDF</button>
     </div>
 
+    <p
+      id="tr-sel-hint"
+      class="mt-2 hidden flex-wrap items-center gap-x-2 text-xs text-slate-400"
+    >
+      Untick a post to leave it out of the exports.
+      <button
+        id="tr-sel-all"
+        class="hidden rounded-full border border-slate-300 px-2.5 py-0.5 text-[11px] font-medium text-slate-500 transition hover:border-brand hover:text-brand"
+        >Select all</button
+      >
+    </p>
+
     <div id="tr-tweets" class="mt-6 space-y-5"></div>
   </section>
 
@@ -209,6 +221,8 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
   const singleHint = document.getElementById('tr-single-hint')!;
   const actions = document.getElementById('tr-actions')!;
   const tweetsEl = document.getElementById('tr-tweets')!;
+  const selHint = document.getElementById('tr-sel-hint')!;
+  const selAll = document.getElementById('tr-sel-all') as HTMLButtonElement;
 
   interface SimpleMedia {
     poster: string;
@@ -229,6 +243,8 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     date?: string;
     avatar?: string;
     url?: string;
+    /** Untick a post to leave it out of the exports (default: included). */
+    sel?: boolean;
     images?: SimpleImage[];
     media?: SimpleMedia[]; // videos / GIFs: poster thumbnail, linked out to X
   }
@@ -263,15 +279,31 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     return n;
   };
 
+  /** Posts included in exports (everything unless unticked). */
+  function selected(): SimpleTweet[] {
+    return thread.filter((t) => t.sel !== false);
+  }
+
+  selAll.addEventListener('click', () => {
+    for (const t of thread) t.sel = true;
+    render();
+  });
+
   function render() {
     tweetsEl.replaceChildren();
     if (!thread.length) {
       actions.classList.add('hidden');
       actions.classList.remove('flex');
+      selHint.classList.add('hidden');
+      selHint.classList.remove('flex');
       return;
     }
     actions.classList.remove('hidden');
     actions.classList.add('flex');
+    const multi = thread.length > 1;
+    selHint.classList.toggle('hidden', !multi);
+    if (multi) selHint.classList.add('flex');
+    selAll.classList.toggle('hidden', selected().length === thread.length);
 
     const first = thread[0];
 
@@ -314,8 +346,9 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
 
     thread.forEach((t, i) => {
       const row = el('article', 'flex gap-3');
-      if (thread.length > 1) {
-        const marker = el(
+      let marker: HTMLElement | null = null;
+      if (multi) {
+        marker = el(
           'span',
           'w-10 shrink-0 pt-[3px] text-right text-[11px] tabular-nums text-slate-400'
         );
@@ -336,6 +369,25 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       if (t.images?.length) col.appendChild(buildImages(t.images));
       for (const m of t.media ?? []) col.appendChild(buildVideoCard(m));
       row.appendChild(col);
+
+      if (multi) {
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = t.sel !== false;
+        cb.className = 'mt-1.5 h-4 w-4 shrink-0 accent-brand';
+        cb.setAttribute('aria-label', `Include post ${i + 1} in exports`);
+        cb.addEventListener('change', () => {
+          t.sel = cb.checked;
+          col.classList.toggle('opacity-40', !cb.checked);
+          marker?.classList.toggle('opacity-40', !cb.checked);
+          selAll.classList.toggle('hidden', selected().length === thread.length);
+        });
+        if (!cb.checked) {
+          col.classList.add('opacity-40');
+          marker?.classList.add('opacity-40');
+        }
+        row.appendChild(cb);
+      }
       tweetsEl.appendChild(row);
     });
   }
@@ -433,6 +485,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
         date: t.createdAt?.slice(0, 10),
         avatar: t.user?.avatar,
         url: t.url,
+        sel: true,
         images: t.media
           .filter((m) => m.type === 'photo')
           .map((m) => ({ src: m.url, w: m.width, h: m.height })),
@@ -504,7 +557,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     return parts
       .map((p) => p.trim())
       .filter(Boolean)
-      .map((p) => ({ text: p }));
+      .map((p) => ({ text: p, sel: true }));
   }
 
   pasteBtn.addEventListener('click', () => {
@@ -517,7 +570,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
 
   // --- exports ------------------------------------------------------------------
   function plainText(): string {
-    return thread.map((t) => t.text).join('\n\n---\n\n');
+    return selected().map((t) => t.text).join('\n\n---\n\n');
   }
 
   const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -529,11 +582,11 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     return m ? `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}` : (iso ?? '');
   }
 
-  /** Article title: first meaningful line of the thread, minus a leading "1/"
-   * marker (requires a space after the slash, so "1/2 of people" survives)
-   * and minus trailing sentence punctuation. */
+  /** Article title: first meaningful line of the first selected post, minus a
+   * leading "1/" marker (requires a space after the slash, so "1/2 of people"
+   * survives) and minus trailing sentence punctuation. */
   function deriveTitle(): string {
-    const raw = thread[0]?.text.split('\n').find((l) => l.trim()) ?? '';
+    const raw = selected()[0]?.text.split('\n').find((l) => l.trim()) ?? '';
     const cleaned = raw
       .replace(/^\s*\d{1,3}\/\s+/, '')
       .trim()
@@ -545,7 +598,8 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
   }
 
   function markdown(): string {
-    const first = thread[0];
+    const posts = selected();
+    const first = posts[0];
     const lines: string[] = [`# ${deriveTitle()}`, ''];
     if (first?.handle) {
       const who = first.author
@@ -555,7 +609,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       if (first.url) bits.push(`[View on X](${first.url})`);
       lines.push(bits.filter(Boolean).join(' · '), '');
     }
-    for (const t of thread) {
+    for (const t of posts) {
       // reply chains can cross accounts; attribute those posts inline
       if (t.handle && first?.handle && t.handle !== first.handle) {
         lines.push(`*${t.author ? `${t.author} ` : ''}(@${t.handle})*`, '');
@@ -573,14 +627,15 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
   }
 
   function htmlDoc(): string {
+    const posts = selected();
+    if (!posts.length) return '';
     const esc = (s: string) =>
       s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-    const first = thread[0];
+    const first = posts[0];
     const title = deriveTitle();
 
-    const items = thread
-      .map((t, i) => {
-        const marker = thread.length > 1 ? `<span class="n">${i + 1}/${thread.length}</span>` : '';
+    const items = posts
+      .map((t) => {
         const other =
           t.handle && first.handle && t.handle !== first.handle
             ? `<p class="other">${esc(t.author ? `${t.author} (@${t.handle})` : `@${t.handle}`)}</p>`
@@ -604,16 +659,21 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
               : `<span class="vid">${img}${tag}</span>`;
           })
           .join('');
-        return `<section>${marker}${other}<p>${esc(t.text).replace(/\n/g, '<br>')}</p>${figs}${vids}</section>`;
+        return `<section>${other}<p>${esc(t.text).replace(/\n/g, '<br>')}</p>${figs}${vids}</section>`;
       })
       .join('\n');
 
     const avatar = first.avatar
       ? `<img class="avatar" src="${esc(first.avatar)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">`
       : '';
-    const meta = [fmtDate(first.date), thread.length > 1 ? `${thread.length} posts` : '']
-      .filter(Boolean)
-      .join(' · ');
+    const partial = posts.length !== thread.length;
+    const countLabel =
+      posts.length > 1
+        ? partial
+          ? `${posts.length} of ${thread.length} posts`
+          : `${posts.length} posts`
+        : '';
+    const meta = [fmtDate(first.date), countLabel].filter(Boolean).join(' · ');
     const open = first.url
       ? ` · <a href="${esc(first.url)}" target="_blank" rel="noopener noreferrer">View on X ↗</a>`
       : '';
@@ -632,7 +692,6 @@ h1{font-family:system-ui,-apple-system,sans-serif;font-size:1.45rem;line-height:
 .meta{display:block;font-size:.8rem;color:#94a3b8;margin-top:2px}
 .meta a{color:#64748b;text-decoration:none;border-bottom:1px dotted #cbd5e1}
 section{margin-bottom:1.8rem}
-.n{display:block;font-family:system-ui,-apple-system,sans-serif;font-size:.7rem;letter-spacing:.04em;color:#cbd5e1;margin-bottom:.4rem}
 .other{font-family:system-ui,-apple-system,sans-serif;font-size:.8rem;color:#64748b;margin:0 0 .3rem}
 p{margin:0;white-space:pre-wrap}
 figure.imgs{margin:1rem 0;display:grid;gap:8px}
@@ -669,6 +728,10 @@ footer a{color:#64748b}
   document.querySelectorAll<HTMLButtonElement>('.tr-exp').forEach((btn) => {
     btn.addEventListener('click', async () => {
       if (!thread.length) return;
+      if (!selected().length) {
+        showError('Select at least one post to export.');
+        return;
+      }
       const stamp = new Date().toISOString().slice(0, 10);
       switch (btn.dataset.trExport) {
         case 'copy':
