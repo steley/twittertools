@@ -12,6 +12,11 @@ Endpoints
 ---------
 GET /api/tweet?id=<id|url>     -> {"tweet": {...}}
 GET /api/thread?url=<id|url>   -> {"tweets": [...], "partial": bool, "reason": str?}
+                                  Walks the syndication parent chain upward; a paste
+                                  of the thread's LAST post returns the whole thread.
+                                  TT_THREAD_DOWNWALK=1 additionally fetches the
+                                  author's self-replies below the root (guest
+                                  conversation endpoint — currently closed by X).
 GET /api/download?url=<media>&name=<filename>   -> binary stream (attachment)
 GET /health                    -> "ok"
 
@@ -78,6 +83,16 @@ ALLOWED_ORIGINS = {
 # the full text. Free, keyless, no login — same trick fxtwitter uses. Any
 # failure degrades gracefully to the teaser text.
 GRAPHQL_QUERY_ID = os.environ.get("TT_GRAPHQL_QUERY_ID", "0hWvDhmW8YQ-S_ib3azIrw")
+# Conversation variant of the guest API: returns the focal tweet's reply tree,
+# the only way to walk a thread downward (syndication exposes just the parent
+# pointer). VERIFIED DEAD for guests on 2026-09-28 (404 on every known id, and
+# UserTweetsAndReplies/v1.1 search are closed too) — so the down-walk below is
+# env-gated off. If X ever re-opens guest conversation access, set
+# TT_THREAD_DOWNWALK=1 (+ override TT_TWEET_DETAIL_QUERY_ID if rotated) and the
+# thread reader unrolls full threads from ANY post again.
+TWEET_DETAIL_QUERY_ID = os.environ.get("TT_TWEET_DETAIL_QUERY_ID", "xOhkmRac04YFZmOzU9PJHg")
+THREAD_DOWNWALK_ENABLED = os.environ.get("TT_THREAD_DOWNWALK", "0") == "1"
+THREAD_MAX_DETAIL_PAGES = 3  # each conversation page carries ~20 entries
 GUEST_API_ENABLED = os.environ.get("TT_GUEST_API", "1") != "0"
 # Overridable so the mock suite can exercise the whole note-tweet fallback
 # against a local fake (never set in production).
@@ -406,6 +421,150 @@ async def enrich_note_tweet(session: ClientSession, tweet_id: str, data: dict) -
 
 
 # --------------------------------------------------------------------------- #
+# Thread completion via the conversation endpoint                             #
+# --------------------------------------------------------------------------- #
+# The syndication endpoint only exposes each tweet's PARENT, so walking it
+# upward from the pasted post collects just the ancestors — a paste of the
+# first or a middle post would silently return a prefix. X's web client gets
+# the rest from TweetDetail, whose conversation listing enumerates the focal
+# tweet's replies; we use it purely as a map (id, parent, author) of the
+# self-reply chain and still fetch all content from syndication, so media and
+# note-tweet handling stay single-sourced there.
+
+async def _query_tweet_detail(
+    session: ClientSession, tweet_id: str, token: str, cursor: Optional[str] = None
+) -> Tuple[int, Optional[List[dict]], Optional[str]]:
+    """One page of the conversation listing as [{id, parent, handle}] plus the
+    bottom cursor for pagination, or (status, None, None) on failure."""
+    variables: Dict[str, Any] = {
+        "focalTweetId": tweet_id,
+        "with_rux_injections": False,
+        "rankingMode": "Relevance",
+        "includePromotedContent": False,
+        "withCommunity": False,
+        "withQuickPromoteEligibilityTweetFields": True,
+        "withBirdwatchNotes": False,
+        "withVoice": True,
+    }
+    if cursor:
+        variables["cursor"] = cursor
+    params = {
+        "variables": json.dumps(variables, separators=(",", ":")),
+        "features": json.dumps(GRAPHQL_FEATURES, separators=(",", ":")),
+    }
+    headers = {
+        "Authorization": f"Bearer {WEB_BEARER_TOKEN}",
+        "x-guest-token": token,
+    }
+    try:
+        async with session.get(
+            f"{GRAPHQL_BASE}/{TWEET_DETAIL_QUERY_ID}/TweetDetail",
+            params=params, headers=headers, timeout=GRAPHQL_TIMEOUT,
+        ) as resp:
+            if resp.status != 200:
+                return resp.status, None, None
+            data = await resp.json(content_type=None)
+    except (ClientError, asyncio.TimeoutError):
+        return 599, None, None
+
+    conv = (data.get("data") or {}).get("threaded_conversation_with_injections_v2") or {}
+    tweets: List[dict] = []
+    bottom: Optional[str] = None
+    for ins in conv.get("instructions") or []:
+        if ins.get("type") != "TimelineAddEntries":
+            continue
+        for entry in ins.get("entries") or []:
+            content = entry.get("content") or {}
+            entry_id = entry.get("entryId") or ""
+            if entry_id.startswith("cursor-bottom"):
+                bottom = content.get("value") or bottom
+                continue
+            # replies are grouped into conversationthread modules; recurse in
+            if content.get("entryType") == "TimelineTimelineModule":
+                items = [(it.get("item") or {}).get("content") or {} for it in content.get("items") or []]
+            elif content.get("entryType") == "TimelineTimelineItem":
+                items = [content]
+            else:
+                items = []
+            for c in items:
+                tr = ((c.get("itemContent") or {}).get("tweet_results") or {}).get("result") or {}
+                if tr.get("__typename") == "TweetWithVisibilityResults":
+                    tr = tr.get("tweet") or {}
+                legacy = tr.get("legacy")
+                if not legacy:  # tombstones, promoted content
+                    continue
+                user = (((tr.get("core") or {}).get("user_results") or {}).get("result") or {}).get("legacy") or {}
+                tweets.append({
+                    "id": legacy.get("id_str"),
+                    "parent": legacy.get("in_reply_to_status_id_str"),
+                    "handle": user.get("screen_name", ""),
+                })
+    return 200, tweets, bottom
+
+
+def _follow_self_reply_chain(candidates: List[dict], root_id: str, root_handle: str) -> List[str]:
+    """Chain of the author's own replies, each answering the previous post.
+    Strict parent-pointer matching keeps out the author's replies to other
+    people's comments (they parent to the comment, not to the thread). A
+    deleted middle post breaks the walk — pasting the last post still works
+    for those threads via the upward walk."""
+    chain: List[str] = []
+    seen = {root_id}
+    current = root_id
+    while True:
+        nxt = next(
+            (
+                c for c in candidates
+                if c["parent"] == current and c["handle"] == root_handle and c["id"] not in seen
+            ),
+            None,
+        )
+        if not nxt:
+            return chain
+        chain.append(nxt["id"])
+        seen.add(nxt["id"])
+        current = nxt["id"]
+
+
+async def collect_descendants(
+    session: ClientSession, root_id: str, root_handle: str
+) -> Tuple[Optional[List[str]], bool]:
+    """Self-reply ids below the thread root, in order, or (None, False) when
+    the endpoint is unavailable (circuit breaker, rate limit, shape change).
+    (ids, True) means pagination hit the page cap with a cursor left — the
+    listing was cut off and there may be more posts we could not see."""
+    global _guest_cooldown_until
+    if not GUEST_API_ENABLED or time.time() < _guest_cooldown_until:
+        return None, False
+    token = await get_guest_token(session)
+    if not token:
+        _guest_cooldown_until = time.time() + GRAPHQL_COOLDOWN
+        return None, False
+
+    candidates: List[dict] = []
+    cursor: Optional[str] = None
+    truncated = False
+    for _ in range(THREAD_MAX_DETAIL_PAGES):
+        status, page, bottom = await _query_tweet_detail(session, root_id, token, cursor)
+        if status in (401, 403, 429) and token:  # stale or rate-limited guest token
+            token = await get_guest_token(session, force=True)
+            if token:
+                status, page, bottom = await _query_tweet_detail(session, root_id, token, cursor)
+        if status != 200 or page is None:
+            _guest_cooldown_until = time.time() + GRAPHQL_COOLDOWN
+            return None, False
+        candidates.extend(page)
+        chain = _follow_self_reply_chain(candidates, root_id, root_handle)
+        if not bottom:
+            return chain, False
+        cursor = bottom
+    # Page cap reached with a cursor still outstanding: the conversation
+    # listing itself ran out before the thread did.
+    truncated = True
+    return chain, truncated
+
+
+# --------------------------------------------------------------------------- #
 # Normalization                                                               #
 # --------------------------------------------------------------------------- #
 
@@ -584,8 +743,37 @@ async def api_thread(request: web.Request) -> web.Response:
         return json_error(404, "Post not found — it may be deleted, protected, or the link is wrong.")
 
     tweets.sort(key=lambda t: int(t["id"] or 0))
-    # If the chain walked upward but never found a self-thread parent structure,
-    # a single tweet is still a valid (non-partial) response for a lone post.
+    root = tweets[0]
+
+    # Downward completion (TT_THREAD_DOWNWALK=1): the up-walk only ever
+    # returns the pasted post's ancestors, so a paste of the first/middle
+    # post needs the self-reply chain fetched from the root via the
+    # conversation endpoint. Dead for guests since 2026-09 — the default-off
+    # gate keeps production requests free of its cost. When enabled, endpoint
+    # failure degrades to the prefix; if the root has any replies at all that
+    # fallback is flagged partial rather than passed off as whole.
+    if THREAD_DOWNWALK_ENABLED and root.get("user", {}).get("screenName"):
+        ids, truncated = await collect_descendants(session, root["id"], root["user"]["screenName"])
+        if truncated:
+            partial = True
+            reason = "conversation_truncated"
+        if ids is None and int(root.get("replies") or 0) > 0:
+            partial = True
+            reason = "replies_unavailable"
+        if ids:
+            for tid in ids:
+                if tid in seen:
+                    continue
+                seen.add(tid)
+                status, data = await fetch_syndication(session, tid)
+                if data is None:
+                    partial = True
+                    reason = f"chain_interrupted_{status}"
+                    break
+                tweets.append(normalize_tweet(data))
+                await asyncio.sleep(0.15)  # be polite to the free endpoint
+            tweets.sort(key=lambda t: int(t["id"] or 0))
+
     return web.json_response({"tweets": tweets, "partial": partial, "reason": reason})
 
 

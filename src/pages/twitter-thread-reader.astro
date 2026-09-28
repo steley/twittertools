@@ -8,7 +8,7 @@ import { TOOLS } from '../lib/tools';
 const faq = [
   {
     q: 'How does the thread reader work?',
-    a: 'Paste a link to any post in a thread and TwitterTools follows the reply chain backwards to collect every post, then shows the whole thread on one clean page — which is why the last post of a thread gives the best results. When the free embed endpoint can\'t provide the chain, switch to Paste mode and drop the text in yourself — all reading and export features still work.',
+    a: 'TwitterTools follows the reply chain backwards from the post you paste — so the thread\'s last post unrolls the whole thing. X no longer lets unauthenticated tools list a post\'s replies, so the reader can\'t walk forwards from the first post; if that\'s the link you have, copy the thread text and use the Paste mode instead — all reading and export features still work.',
   },
   {
     q: 'Can I export a thread as Markdown?',
@@ -20,7 +20,7 @@ const faq = [
   },
   {
     q: 'Why can\'t some threads be unrolled?',
-    a: 'Deleted posts, protected accounts and occasional restrictions on X\'s embed endpoint can break the chain. The tool tells you when a thread is only partially available and offers the paste mode as a reliable fallback.',
+    a: 'Deleted posts, protected accounts and occasional restrictions on X\'s embed endpoint can break the chain. X also only exposes each post\'s parent — not its replies — which is why the reader walks backwards and a full unroll needs the thread\'s last post. The tool tells you when a thread is only partially available and offers the paste mode as a reliable fallback.',
   },
   {
     q: 'Is this like Thread Reader App?',
@@ -72,7 +72,8 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
         </button>
       </form>
       <p class="mt-2 text-xs text-slate-500">
-        Best-effort via X's free embed endpoint. If a thread can't be unrolled, use the Paste mode.
+        The reader follows replies backwards from the post you paste — the thread's
+        <strong>last</strong> post gives the full thread. If a chain can't be followed, use the Paste mode.
       </p>
     </div>
 
@@ -164,8 +165,9 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
         <p class="text-sm font-bold text-brand">Step 1</p>
         <p class="mt-1 font-medium">Get the thread</p>
         <p class="mt-1 text-sm text-slate-600">
-          Copy the link to any post in the thread — the reader walks the reply chain backwards, so
-          the last post works best. Only have the text? Switch to the Paste mode instead.
+          Copy the link to the thread's <strong>last</strong> post — the reader walks the reply
+          chain backwards from there, so one link covers the whole thread. Only have the text?
+          Switch to the Paste mode instead.
         </p>
       </li>
       <li class="rounded-2xl border border-slate-200 bg-white p-5">

@@ -72,6 +72,15 @@ FIXTURES = {
     "777777777777777777": tweet_obj(
         "777777777777777777", "video and photos in one post", "mockuser", media=VIDEO_MEDIA + PHOTO_MEDIA
     ),
+    # thread continuation below 333: the full chain is 222 <- 333 <- 888
+    "888888888888888888": tweet_obj("888888888888888888", "last post of the chain", "mockuser", reply_to="333333333333333333"),
+    # a standalone post (its conversation listing has no self-replies)
+    "999999999999999999": tweet_obj("999999999999999999", "a standalone post", "mockuser"),
+    # root whose conversation endpoint fails -> prefix kept, partial flagged
+    "555555555555555555": tweet_obj("555555555555555555", "replies we cannot list", "mockuser"),
+    # thread whose conversation listing never ends (bottom cursor loops)
+    "1010101010101010101": tweet_obj("1010101010101010101", "listing cut off", "mockuser"),
+    "1010101010101010102": tweet_obj("1010101010101010102", "second post", "mockuser", reply_to="1010101010101010101"),
     # long "note" post: syndication returns a teaser + an empty note_tweet,
     # the full body only exists on the (mocked) guest GraphQL endpoint
     "666666666666666666": dict(
@@ -103,10 +112,59 @@ async def mock_activate(request):
     return web.json_response({"guest_token": "mock-guest-token"})
 
 
+def _td_tweet(tid, parent, screen="mockuser"):
+    """One tweet inside a TweetDetail conversation listing (GraphQL shape)."""
+    return {
+        "__typename": "Tweet",
+        "legacy": {"id_str": tid, "in_reply_to_status_id_str": parent, "full_text": "..."},
+        "core": {"user_results": {"result": {"legacy": {"screen_name": screen}}}},
+    }
+
+
+def conv_response(pairs, bottom=None):
+    """A TweetDetail page: tweet entries plus an optional bottom cursor."""
+    entries = [
+        {
+            "entryId": f"tweet-{tid}",
+            "content": {
+                "entryType": "TimelineTimelineItem",
+                "itemContent": {"tweet_results": {"result": _td_tweet(tid, parent)}},
+            },
+        }
+        for tid, parent in pairs
+    ]
+    if bottom:
+        entries.append({
+            "entryId": f"cursor-bottom-{bottom}",
+            "content": {"entryType": "TimelineTimelineCursor", "value": bottom},
+        })
+    return {"data": {"threaded_conversation_with_injections_v2": {"instructions": [
+        {"type": "TimelineAddEntries", "entries": entries}
+    ]}}}
+
+
 async def mock_graphql(request):
     graphql_hits.append("query")
     variables = json.loads(request.query.get("variables", "{}"))
-    if variables.get("tweetId") == "666666666666666666":
+    if "focalTweetId" in variables:  # TweetDetail (conversation listing)
+        focal = variables["focalTweetId"]
+        if focal == "555555555555555555":
+            return web.json_response({"errors": [{"message": "boom"}]}, status=500)
+        if focal == "222222222222222222":
+            return web.json_response(conv_response([
+                ("222222222222222222", None),
+                ("333333333333333333", "222222222222222222"),
+                ("888888888888888888", "333333333333333333"),
+            ]))
+        if focal == "999999999999999999":
+            return web.json_response(conv_response([("999999999999999999", None)]))
+        if focal == "1010101010101010101":
+            return web.json_response(conv_response(
+                [("1010101010101010101", None), ("1010101010101010102", "1010101010101010101")],
+                bottom="never-ending",
+            ))
+        return web.json_response({"errors": [{"message": "not found"}]}, status=404)
+    if variables.get("tweetId") == "666666666666666666":  # TweetResultByRestId
         return web.json_response({
             "data": {"tweetResult": {"result": {
                 "__typename": "Tweet",
@@ -163,6 +221,8 @@ def run_downloader():
         # point the note-tweet fallback at the local fake guest API
         TT_GUEST_ACTIVATE_URL="http://127.0.0.1:8898/activate",
         TT_GRAPHQL_BASE="http://127.0.0.1:8898/graphql",
+        # exercise the conversation down-walk (default-off in production)
+        TT_THREAD_DOWNWALK="1",
     )
     proc = subprocess.Popen([sys.executable, "downloader_server.py"], env=env)
     return proc
@@ -314,6 +374,50 @@ def run_checks():
     data = json.loads(body)
     kinds = [m["type"] for m in data.get("tweet", {}).get("media", [])]
     check("mixed media kept", code == 200 and kinds == ["video", "photo"], str(kinds))
+
+    # 14. thread from the FIRST post: nothing above it, the conversation
+    # endpoint supplies the self-replies below the root
+    code, _, body = get("/api/thread?url=https://x.com/mockuser/status/222222222222222222")
+    data = json.loads(body)
+    ids = [t["id"] for t in data.get("tweets", [])]
+    full = ["222222222222222222", "333333333333333333", "888888888888888888"]
+    check("first-post paste = full thread", code == 200 and ids == full and not data.get("partial"), f"{ids} partial={data.get('partial')}")
+
+    # 15. thread from a MIDDLE post: up-walk + down-walk dedupe to the same set
+    code, _, body = get("/api/thread?url=https://x.com/mockuser/status/888888888888888888")
+    data = json.loads(body)
+    ids = [t["id"] for t in data.get("tweets", [])]
+    check("middle-post paste = full thread", code == 200 and ids == full, str(ids))
+
+    # 16. standalone post: conversation has no self-replies -> complete, no warning
+    code, _, body = get("/api/thread?url=999999999999999999")
+    data = json.loads(body)
+    check(
+        "lone post complete",
+        code == 200 and len(data.get("tweets", [])) == 1 and not data.get("partial"),
+        str(body[:150]),
+    )
+
+    # 17. conversation listing cut off by the page cap -> honest partial flag
+    code, _, body = get("/api/thread?url=1010101010101010101")
+    data = json.loads(body)
+    ids = [t["id"] for t in data.get("tweets", [])]
+    check(
+        "truncated conversation flagged",
+        code == 200 and data.get("partial") and data.get("reason") == "conversation_truncated"
+        and ids == ["1010101010101010101", "1010101010101010102"],
+        str(body[:200]),
+    )
+
+    # 18. conversation endpoint down -> prefix kept, partial flagged because the
+    # root has replies. Must run last: the 500 trips the guest-API breaker.
+    code, _, body = get("/api/thread?url=555555555555555555")
+    data = json.loads(body)
+    check(
+        "endpoint down -> partial prefix",
+        code == 200 and data.get("partial") and data.get("reason") == "replies_unavailable",
+        str(body[:200]),
+    )
 
     print()
     if failures:
