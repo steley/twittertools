@@ -13,6 +13,10 @@ interface Props {
 
 const { title, description, path, jsonLd = [] } = Astro.props;
 const canonical = `https://twittertools.com${path}`;
+// Cloudflare Web Analytics beacon — cookie-free, aggregate page views only.
+// Set PUBLIC_CF_ANALYTICS_TOKEN in .env (token from the CF dashboard) to
+// enable; without it nothing analytics-related is rendered at all.
+const cfToken = import.meta.env.PUBLIC_CF_ANALYTICS_TOKEN as string | undefined;
 const siteLd = {
   '@context': 'https://schema.org',
   '@type': 'WebSite',
@@ -51,6 +55,16 @@ const siteLd = {
     <meta name="twitter:image" content="https://twittertools.com/og.png" />
     <script type="application/ld+json" set:html={JSON.stringify(siteLd)} />
     {jsonLd.map((obj) => <script type="application/ld+json" set:html={JSON.stringify(obj)} />)}
+    {
+      cfToken && (
+        <script
+          is:inline
+          defer
+          src="https://static.cloudflareinsights.com/beacon.min.js"
+          data-cf-beacon={JSON.stringify({ token: cfToken })}
+        />
+      )
+    }
   </head>
   <body class="flex min-h-screen flex-col bg-slate-50 text-ink antialiased">
     <a

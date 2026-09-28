@@ -12,7 +12,7 @@ const faq = [
   },
   {
     q: 'Can I export a thread as Markdown?',
-    a: 'Yes — exports read like a proper article: title, author and date at the top, then the posts flowing as one piece, with photos embedded as images and videos linked. Any post can be unticked before exporting to drop it (handy for accidental duplicates). Ready for Notion, Obsidian, GitHub or any static-site generator. TXT and standalone HTML exports are there too, and the PDF export opens your browser\'s print dialog — choose "Save as PDF".',
+    a: 'Yes — exports read like a proper article: title, author and date at the top, then the posts flowing as one piece, with photos embedded as images and videos linked. Any post can be unticked before exporting to drop it (handy for accidental duplicates). Ready for Notion, Obsidian, GitHub or any static-site generator. TXT and standalone HTML exports are there too, and the PDF export opens your browser\'s print dialog — choose "Save as PDF". There\'s also a Copy for AI button that formats the selection with author, date and source for pasting straight into ChatGPT, Claude or Gemini.',
   },
   {
     q: 'Do I need to log in to X?',
@@ -106,6 +106,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     <div id="tr-actions" class="mt-5 hidden flex-wrap items-center gap-2">
       <button data-tr-export="copy" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Copy all</button>
       <button data-tr-export="md" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Copy Markdown</button>
+      <button data-tr-export="ai" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Copy for AI</button>
       <button data-tr-export="txt" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Export TXT</button>
       <button data-tr-export="mdfile" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Export .md</button>
       <button data-tr-export="html" class="tr-exp rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white hover:bg-brand-dark">Export HTML</button>
@@ -626,6 +627,46 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     return lines.join('\n');
   }
 
+  /** Formatted for pasting into an LLM (ChatGPT, Claude, Gemini): who wrote
+   * it, when, and where it's from up top — the model can't know any of that
+   * from the bare text — then posts delimited with plain "n/" markers and
+   * media as bracketed notes. Respects the ticked selection; no promo. */
+  function aiText(): string {
+    const posts = selected();
+    const first = posts[0];
+    const by = first?.handle ? `${first.author ? `${first.author} ` : ''}(@${first.handle})` : '';
+    const kind = posts.length > 1 ? 'Thread' : 'Post';
+    const head = [
+      by ? `${kind} by ${by}` : kind,
+      fmtDate(first?.date),
+      posts.length > 1 ? `${posts.length} posts` : '',
+    ]
+      .filter(Boolean)
+      .join(' — ');
+    const lines: string[] = [];
+    if (head) lines.push(head);
+    if (first?.url) lines.push(`Source: ${first.url}`);
+    if (head || first?.url) lines.push('');
+    posts.forEach((t, i) => {
+      if (posts.length > 1) lines.push(`${i + 1}/`);
+      // reply chains can cross accounts; attribute those posts inline
+      if (t.handle && first?.handle && t.handle !== first.handle) {
+        lines.push(`${t.author ? `${t.author} ` : ''}(@${t.handle}):`);
+      }
+      lines.push(t.text, '');
+      const media = [
+        ...(t.images ?? []).map((im) => `[photo: ${im.src}]`),
+        ...(t.media ?? []).map((m) =>
+          m.postUrl
+            ? `[${m.label.toLowerCase()} — watch on X: ${m.postUrl}]`
+            : `[${m.label.toLowerCase()}]`
+        ),
+      ];
+      if (media.length) lines.push(...media, '');
+    });
+    return lines.join('\n').trimEnd() + '\n';
+  }
+
   function htmlDoc(): string {
     const posts = selected();
     if (!posts.length) return '';
@@ -739,6 +780,9 @@ footer a{color:#64748b}
           break;
         case 'md':
           await navigator.clipboard.writeText(markdown());
+          break;
+        case 'ai':
+          await navigator.clipboard.writeText(aiText());
           break;
         case 'txt':
           download(`thread-${stamp}.txt`, plainText(), 'text/plain');

@@ -58,6 +58,20 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
 )
 
+# Origins allowed to call the API cross-origin. The production site is
+# same-origin (Apache proxies /api/) and needs no CORS header; the localhost
+# entries exist so `astro dev` can talk to a locally running API. Other
+# websites don't get to embed our API in their pages.
+ALLOWED_ORIGINS = {
+    o.strip()
+    for o in os.environ.get(
+        "TT_ALLOWED_ORIGINS",
+        "https://twittertools.com,https://www.twittertools.com,"
+        "http://localhost:4321,http://127.0.0.1:4321",
+    ).split(",")
+    if o.strip()
+}
+
 # Long ("note") posts: the syndication endpoint only returns a teaser (its
 # note_tweet field carries an ID but no body). X's web GraphQL endpoint,
 # called with the anonymous guest token every browser receives, still returns
@@ -631,7 +645,7 @@ async def api_download(request: web.Request) -> web.StreamResponse:
                     # Set here, not in the CORS middleware: streaming responses
                     # flush their headers at prepare(), before the middleware
                     # can touch them.
-                    "Access-Control-Allow-Origin": "*",
+                    **cors_for(request),
                     "Access-Control-Expose-Headers": "Content-Disposition, Content-Length",
                 },
             )
@@ -663,20 +677,33 @@ async def health(request: web.Request) -> web.Response:
 # App wiring                                                                  #
 # --------------------------------------------------------------------------- #
 
+def cors_for(request: web.Request) -> Dict[str, str]:
+    """CORS headers for this request: echo the Origin only if it is
+    allowlisted, otherwise return nothing (browsers then block the call).
+    curl and scripts ignore CORS entirely — abuse from them is the rate
+    limiter's job, not CORS's."""
+    origin = request.headers.get("Origin", "")
+    if origin in ALLOWED_ORIGINS:
+        return {"Access-Control-Allow-Origin": origin, "Vary": "Origin"}
+    return {}
+
+
 @web.middleware
 async def cors_middleware(request: web.Request, handler):
+    allowed = cors_for(request)
     if request.method == "OPTIONS":
         return web.Response(
             status=204,
             headers={
-                "Access-Control-Allow-Origin": "*",
+                **allowed,
                 "Access-Control-Allow-Methods": "GET, OPTIONS",
                 "Access-Control-Allow-Headers": "*",
                 "Access-Control-Max-Age": "86400",
             },
         )
     resp = await handler(request)
-    resp.headers.setdefault("Access-Control-Allow-Origin", "*")
+    for key, value in allowed.items():
+        resp.headers.setdefault(key, value)
     return resp
 
 

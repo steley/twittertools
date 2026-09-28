@@ -69,6 +69,9 @@ FIXTURES = {
     "222222222222222222": tweet_obj("222222222222222222", "photo post", "mockuser", media=PHOTO_MEDIA),
     "333333333333333333": tweet_obj("333333333333333333", "top of a chain", "mockuser", reply_to="222222222222222222"),
     "404444444444444444": None,
+    "777777777777777777": tweet_obj(
+        "777777777777777777", "video and photos in one post", "mockuser", media=VIDEO_MEDIA + PHOTO_MEDIA
+    ),
     # long "note" post: syndication returns a teaser + an empty note_tweet,
     # the full body only exists on the (mocked) guest GraphQL endpoint
     "666666666666666666": dict(
@@ -288,6 +291,29 @@ def run_checks():
     before = len(graphql_hits)
     get("/api/tweet?id=666666666666666666")
     check("note fetch cached", len(graphql_hits) == before)
+
+    # 12. CORS: allowlisted origins get their Origin echoed, everyone else nothing
+    code, headers, _ = get("/api/tweet?id=111111111111111111", headers={"Origin": "https://twittertools.com"})
+    check("cors site origin echoed", headers.get("Access-Control-Allow-Origin") == "https://twittertools.com", str(headers.get("Access-Control-Allow-Origin")))
+    code, headers, _ = get("/api/tweet?id=111111111111111111", headers={"Origin": "http://localhost:4321"})
+    check("cors dev origin allowed", headers.get("Access-Control-Allow-Origin") == "http://localhost:4321", str(headers.get("Access-Control-Allow-Origin")))
+    code, headers, _ = get("/api/tweet?id=111111111111111111", headers={"Origin": "https://evil.example.com"})
+    check("cors foreign origin gets nothing", "Access-Control-Allow-Origin" not in headers, str(headers.get("Access-Control-Allow-Origin")))
+    preflight = urllib.request.Request(
+        "http://127.0.0.1:8787/api/tweet",
+        method="OPTIONS",
+        headers={"Origin": "https://twittertools.com", "Access-Control-Request-Method": "GET"},
+    )
+    with _opener.open(preflight, timeout=15) as r:
+        check("cors preflight echoed", r.status == 204 and r.headers.get("Access-Control-Allow-Origin") == "https://twittertools.com", str(r.status))
+    code, headers, _ = get("/api/download?url=http://127.0.0.1:8899/video-832.mp4&name=v.mp4", headers={"Origin": "https://twittertools.com"})
+    check("download cors echoed", headers.get("Access-Control-Allow-Origin") == "https://twittertools.com", str(headers.get("Access-Control-Allow-Origin")))
+
+    # 13. mixed media (video + photos) survives in order
+    code, _, body = get("/api/tweet?id=777777777777777777")
+    data = json.loads(body)
+    kinds = [m["type"] for m in data.get("tweet", {}).get("media", [])]
+    check("mixed media kept", code == 200 and kinds == ["video", "photo"], str(kinds))
 
     print()
     if failures:

@@ -33,7 +33,7 @@ const jsonLd = {
     </h1>
     <p class="mx-auto mt-4 max-w-2xl text-lg text-slate-600">
       Download videos and images, unroll threads, turn posts into polished images and keep a
-      private bookmark library. No account, no tracking, no paywall.
+      private bookmark library. No account, no cookies, no paywall.
     </p>
 
     <form id="home-form" class="mx-auto mt-8 flex max-w-2xl flex-col gap-3 sm:flex-row">
@@ -124,6 +124,8 @@ const jsonLd = {
   const esc = (s: string) =>
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const toolUrl = (slug: string, postUrl: string) => `${slug}?url=${encodeURIComponent(postUrl)}`;
+  const pill = (href: string, label: string, external = false) =>
+    `<a class="rounded-full border border-sky-200 bg-white px-4 py-1.5 text-xs font-medium text-sky-700 transition hover:border-brand hover:text-brand" href="${href}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>${label}</a>`;
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -145,10 +147,16 @@ const jsonLd = {
       const videos = t.media.filter((m) => m.type === 'video' || m.type === 'animated_gif');
       const photos = t.media.filter((m) => m.type === 'photo');
       if (videos.length && photos.length) {
+        // mixed media: no single right tool — show the action card instead
         chooseBox.innerHTML =
-          `This post has ${videos.length} video and ${photos.length} photo${photos.length > 1 ? 's' : ''} — open the ` +
-          `<a class="font-semibold underline" href="${toolUrl('/twitter-video-downloader', postUrl)}">Video Downloader</a> or the ` +
-          `<a class="font-semibold underline" href="${toolUrl('/twitter-image-downloader', postUrl)}">Image Downloader</a>.`;
+          `<p>This post has ${videos.length} video and ${photos.length} photo${photos.length > 1 ? 's' : ''} — what would you like to do?</p>` +
+          `<div class="mt-2.5 flex flex-wrap gap-2">` +
+          pill(toolUrl('/twitter-video-downloader', postUrl), 'Download video') +
+          pill(toolUrl('/twitter-image-downloader', postUrl), 'Download images') +
+          pill(toolUrl('/tweet-screenshot-generator', postUrl), 'Screenshot') +
+          pill(toolUrl('/twitter-thread-reader', postUrl), 'Read replies') +
+          pill(postUrl, 'Open on X ↗', true) +
+          `</div>`;
         chooseBox.classList.remove('hidden');
       } else if (videos.length) {
         location.assign(toolUrl('/twitter-video-downloader', postUrl));
