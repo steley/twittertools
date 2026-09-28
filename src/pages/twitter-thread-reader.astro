@@ -23,6 +23,10 @@ const faq = [
     a: 'Deleted posts, protected accounts and occasional restrictions on X\'s embed endpoint can break the chain. X also only exposes each post\'s parent — not its replies — which is why the reader walks backwards and a full unroll needs the thread\'s last post. The tool tells you when a thread is only partially available and offers the paste mode as a reliable fallback.',
   },
   {
+    q: 'Does it work with X Articles (long-form posts)?',
+    a: 'Partly. X Articles are a separate long-form format, and without a login X only exposes their title, preview and cover image — so the reader shows exactly that and links to the original on X. The full body isn\'t available to any logged-out tool.',
+  },
+  {
     q: 'Is this like Thread Reader App?',
     a: 'It\'s the same idea — unroll, read, export — but independent, free, and combined with the rest of the TwitterTools toolkit. No account required and no storage of what you unroll.',
   },
@@ -223,6 +227,12 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
   const errorBox = document.getElementById('tr-error')!;
   const partialBox = document.getElementById('tr-partial')!;
   const singleHint = document.getElementById('tr-single-hint')!;
+  // innerHTML constants (static strings, no user data): the hint switches
+  // between them per unroll, so set the content on every show
+  const SINGLE_HINT_DEFAULT =
+    'Only got one post? If this is the <strong>start</strong> of a thread, paste the link to the <strong>last</strong> post instead — the reader unrolls threads backwards and needs a post that has replies above it.';
+  const SINGLE_HINT_ARTICLE =
+    'This is an X Article, not a thread — without a login X only exposes its title and preview, so that is all the reader can show. Open <a class="font-semibold underline" href="ARTICLE_URL" target="_blank" rel="noopener">the article on X</a> to read the whole thing.';
   const actions = document.getElementById('tr-actions')!;
   const tweetsEl = document.getElementById('tr-tweets')!;
   const selHint = document.getElementById('tr-sel-hint')!;
@@ -247,6 +257,8 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     date?: string;
     avatar?: string;
     url?: string;
+    /** X Article (long-form): text is title + preview, media is the cover. */
+    article?: boolean;
     /** Untick a post to leave it out of the exports (default: included). */
     sel?: boolean;
     images?: SimpleImage[];
@@ -489,6 +501,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
         date: t.createdAt?.slice(0, 10),
         avatar: t.user?.avatar,
         url: t.url,
+        article: t.article,
         sel: true,
         images: t.media
           .filter((m) => m.type === 'photo')
@@ -502,9 +515,11 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
           })),
       }));
       const first = data.tweets[0];
-      threadTitle = first?.user?.screenName
-        ? `Thread by ${first.user.name} (@${first.user.screenName})`
-        : 'Thread';
+      threadTitle = first?.article
+        ? (first.text.split('\n')[0] ?? 'Article')
+        : first?.user?.screenName
+          ? `Thread by ${first.user.name} (@${first.user.screenName})`
+          : 'Thread';
       render();
       // one-click "save the whole thread" into the local bookmark library
       if (first) {
@@ -532,6 +547,9 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
         partialBox.textContent = 'Partially unrolled: some posts in the chain were unavailable (deleted or protected).';
         partialBox.classList.remove('hidden');
       } else if (data.tweets.length === 1) {
+        singleHint.innerHTML = first?.article
+          ? SINGLE_HINT_ARTICLE.replace('ARTICLE_URL', (first.url ?? 'https://x.com').replace(/"/g, '%22'))
+          : SINGLE_HINT_DEFAULT;
         singleHint.classList.remove('hidden');
       }
     } catch (err) {

@@ -81,6 +81,19 @@ FIXTURES = {
     # thread whose conversation listing never ends (bottom cursor loops)
     "1010101010101010101": tweet_obj("1010101010101010101", "listing cut off", "mockuser"),
     "1010101010101010102": tweet_obj("1010101010101010102", "second post", "mockuser", reply_to="1010101010101010101"),
+    # X Article (long-form): title + preview + cover only, body needs login
+    "1414141414141414141": dict(
+        tweet_obj("1414141414141414141", "https://t.co/artlink", "mockuser"),
+        article={
+            "title": "My 12 favorite GPT tricks",
+            "preview_text": "A holiday special covering what I learned.\nSecond line of the preview.",
+            "cover_media": {"media_info": {
+                "original_img_url": "https://pbs.twimg.com/media/COVER123.jpg",
+                "original_img_width": 1280,
+                "original_img_height": 512,
+            }},
+        },
+    ),
     # long "note" post: syndication returns a teaser + an empty note_tweet,
     # the full body only exists on the (mocked) guest GraphQL endpoint
     "666666666666666666": dict(
@@ -158,6 +171,8 @@ async def mock_graphql(request):
             ]))
         if focal == "999999999999999999":
             return web.json_response(conv_response([("999999999999999999", None)]))
+        if focal == "1414141414141414141":  # X Article: a lone post, no self-replies
+            return web.json_response(conv_response([("1414141414141414141", None)]))
         if focal == "1010101010101010101":
             return web.json_response(conv_response(
                 [("1010101010101010101", None), ("1010101010101010102", "1010101010101010101")],
@@ -409,7 +424,36 @@ def run_checks():
         str(body[:200]),
     )
 
-    # 18. conversation endpoint down -> prefix kept, partial flagged because the
+    # 18. X Article: title+preview become the text, cover becomes a photo,
+    # article flag set, no bare t.co link left in the text. Runs before the
+    # endpoint-down test so the guest breaker is still cold for the down-walk.
+    code, _, body = get("/api/tweet?id=1414141414141414141")
+    data = json.loads(body).get("tweet", {})
+    check("article 200", code == 200, str(body[:150]))
+    check(
+        "article text = title + preview",
+        data.get("text") == "My 12 favorite GPT tricks\n\nA holiday special covering what I learned.\nSecond line of the preview.",
+        repr(data.get("text")),
+    )
+    check("article t.co dropped", "t.co" not in data.get("text", ""))
+    media = data.get("media", [])
+    check(
+        "article cover as photo",
+        media and media[0]["type"] == "photo" and media[0]["url"] == "https://pbs.twimg.com/media/COVER123.jpg"
+        and media[0]["width"] == 1280 and media[0]["height"] == 512,
+        str(media),
+    )
+    check("article flag", data.get("article") is True)
+    code, _, body = get("/api/thread?url=1414141414141414141")
+    data = json.loads(body)
+    check(
+        "article in thread reader",
+        code == 200 and len(data.get("tweets", [])) == 1 and data["tweets"][0].get("article") is True
+        and not data.get("partial"),
+        str(body[:150]),
+    )
+
+    # 19. conversation endpoint down -> prefix kept, partial flagged because the
     # root has replies. Must run last: the 500 trips the guest-API breaker.
     code, _, body = get("/api/thread?url=555555555555555555")
     data = json.loads(body)

@@ -624,6 +624,27 @@ def normalize_tweet(d: dict) -> dict:
         (d.get("entities") or {}).get("urls") or [],
         [m.get("url") for m in (d.get("mediaDetails") or [])],
     )
+    media_details = list(d.get("mediaDetails") or [])
+    # X Article (long-form post): both free endpoints carry only the title,
+    # a two-line preview and the cover image — the body needs a logged-in
+    # client. Surface what exists instead of leaving a bare t.co link, and
+    # flag it so UIs can explain why there is no full text.
+    article = d.get("article") or {}
+    if article:
+        title = (article.get("title") or "").strip()
+        preview = (article.get("preview_text") or "").strip()
+        text = "\n\n".join(part for part in (title, preview) if part)
+        cover = ((article.get("cover_media") or {}).get("media_info") or {})
+        if cover.get("original_img_url") and not any(
+            m.get("media_url_https") == cover["original_img_url"] for m in media_details
+        ):
+            media_details.append({
+                "type": "photo",
+                "media_url_https": cover["original_img_url"],
+                "sizes": {
+                    "large": {"w": cover.get("original_img_width"), "h": cover.get("original_img_height")}
+                },
+            })
     return {
         "id": tweet_id,
         "url": f"https://x.com/{screen or 'i'}/status/{tweet_id}",
@@ -634,10 +655,11 @@ def normalize_tweet(d: dict) -> dict:
             "screenName": screen,
             "avatar": user.get("profile_image_url_https", ""),
         },
-        "media": [normalize_media(m) for m in (d.get("mediaDetails") or [])],
+        "media": [normalize_media(m) for m in media_details],
         "likes": d.get("favorite_count"),
         "replies": d.get("conversation_count"),
         "replyToId": d.get("in_reply_to_status_id_str"),
+        "article": bool(article),
         "quoted": normalize_tweet(d["quoted_tweet"]) if d.get("quoted_tweet") else None,
     }
 

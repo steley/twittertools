@@ -41,6 +41,8 @@ export interface TweetData {
   /** Engagement counts when the embed endpoint exposes them */
   likes?: number | null;
   replies?: number | null;
+  /** X Article (long-form): text is title + preview, media is the cover */
+  article?: boolean;
 }
 
 export interface TweetResponse {
