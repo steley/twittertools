@@ -12,7 +12,7 @@ const faq = [
   },
   {
     q: 'Can I export a thread as Markdown?',
-    a: 'Yes — one click gives you a .md file with every post numbered, photos embedded as images and videos linked, ready for Notion, Obsidian, GitHub or any static-site generator. TXT and standalone HTML exports are there too, and the PDF export opens your browser\'s print dialog — choose "Save as PDF".',
+    a: 'Yes — exports read like a proper article: title, author and date at the top, then the posts flowing as one piece, with photos embedded as images and videos linked. Ready for Notion, Obsidian, GitHub or any static-site generator. TXT and standalone HTML exports are there too, and the PDF export opens your browser\'s print dialog — choose "Save as PDF".',
   },
   {
     q: 'Do I need to log in to X?',
@@ -112,7 +112,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       <button data-tr-export="pdf" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Export PDF</button>
     </div>
 
-    <div id="tr-tweets" class="mt-6 space-y-4"></div>
+    <div id="tr-tweets" class="mt-6 space-y-5"></div>
   </section>
 
   <AdSlot />
@@ -227,6 +227,8 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     author?: string;
     handle?: string;
     date?: string;
+    avatar?: string;
+    url?: string;
     images?: SimpleImage[];
     media?: SimpleMedia[]; // videos / GIFs: poster thumbnail, linked out to X
   }
@@ -271,31 +273,70 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     actions.classList.remove('hidden');
     actions.classList.add('flex');
 
+    const first = thread[0];
+
+    // article byline: author, date and post count appear once at the top,
+    // not repeated on every post
+    if (first.handle) {
+      const by = el('div', 'flex items-center gap-3 border-b border-slate-100 pb-5');
+      if (first.avatar) {
+        const av = document.createElement('img');
+        av.alt = '';
+        av.referrerPolicy = 'no-referrer';
+        av.className = 'h-11 w-11 shrink-0 rounded-full bg-slate-100 object-cover';
+        wireMediaImg(av, first.avatar, 'thread-avatar');
+        by.appendChild(av);
+      }
+      const id = el('div', 'min-w-0');
+      const name = el('div', 'truncate text-sm font-semibold text-slate-900');
+      name.textContent = first.author ?? `@${first.handle}`;
+      const sub = el('div', 'mt-0.5 text-xs text-slate-500');
+      sub.textContent = [
+        `@${first.handle}`,
+        fmtDate(first.date),
+        `${thread.length} post${thread.length > 1 ? 's' : ''}`,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      id.append(name, sub);
+      by.appendChild(id);
+      if (first.url) {
+        const open = document.createElement('a');
+        open.href = first.url;
+        open.target = '_blank';
+        open.rel = 'noopener noreferrer';
+        open.className = 'ml-auto shrink-0 text-xs text-slate-400 hover:text-brand';
+        open.textContent = 'View on X ↗';
+        by.appendChild(open);
+      }
+      tweetsEl.appendChild(by);
+    }
+
     thread.forEach((t, i) => {
-      const card = el('article', 'rounded-xl border border-slate-200 p-4');
-      const head = el('div', 'flex items-baseline gap-2');
-      const num = el('span', 'text-sm font-bold text-brand');
-      num.textContent = `${i + 1}/${thread.length}`;
-      head.appendChild(num);
-      if (t.handle) {
-        const who = el('span', 'text-xs text-slate-500');
+      const row = el('article', 'flex gap-3');
+      if (thread.length > 1) {
+        const marker = el(
+          'span',
+          'w-10 shrink-0 pt-[3px] text-right text-[11px] tabular-nums text-slate-400'
+        );
+        marker.textContent = `${i + 1}/${thread.length}`;
+        row.appendChild(marker);
+      }
+      const col = el('div', 'min-w-0 flex-1');
+      // reply chains can cross accounts; attribute those posts inline
+      if (t.handle && first.handle && t.handle !== first.handle) {
+        const who = el('p', 'mb-1 text-xs font-medium text-slate-500');
         who.textContent = t.author ? `${t.author} (@${t.handle})` : `@${t.handle}`;
-        head.appendChild(who);
+        col.appendChild(who);
       }
-      if (t.date) {
-        const when = el('span', 'ml-auto text-xs text-slate-500');
-        when.textContent = t.date;
-        head.appendChild(when);
-      }
-      card.appendChild(head);
-
-      const body = el('p', 'mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700');
+      const body = el('p', 'whitespace-pre-wrap text-[15px] leading-7 text-slate-800');
       body.textContent = t.text;
-      card.appendChild(body);
+      col.appendChild(body);
 
-      if (t.images?.length) card.appendChild(buildImages(t.images));
-      for (const m of t.media ?? []) card.appendChild(buildVideoCard(m));
-      tweetsEl.appendChild(card);
+      if (t.images?.length) col.appendChild(buildImages(t.images));
+      for (const m of t.media ?? []) col.appendChild(buildVideoCard(m));
+      row.appendChild(col);
+      tweetsEl.appendChild(row);
     });
   }
 
@@ -390,6 +431,8 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
         author: t.user?.name,
         handle: t.user?.screenName,
         date: t.createdAt?.slice(0, 10),
+        avatar: t.user?.avatar,
+        url: t.url,
         images: t.media
           .filter((m) => m.type === 'photo')
           .map((m) => ({ src: m.url, w: m.width, h: m.height })),
@@ -476,40 +519,82 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
   function plainText(): string {
     return thread.map((t) => t.text).join('\n\n---\n\n');
   }
-  function markdown(): string {
-    const n = thread.length;
-    const head = `# ${threadTitle}\n\n> Unrolled with TwitterTools — twittertools.com\n`;
-    return (
-      head +
-      '\n' +
-      thread
-        .map((t, i) => {
-          // photos embed as standard Markdown images (permanent CDN links);
-          // videos/GIFs become links, since .md files can't carry video
-          const media = [
-            ...(t.images ?? []).map((im) => `\n\n![media](${im.src})`),
-            ...(t.media ?? []).map((m) =>
-              m.postUrl ? `\n\n[${m.label} — watch on X](${m.postUrl})` : `\n\n[${m.label}]`
-            ),
-          ].join('');
-          return `**${i + 1}/${n}**\n\n${t.text}${media}`;
-        })
-        .join('\n\n---\n\n') +
-      '\n'
-    );
+
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  /** "2026-09-28" → "Sep 28, 2026". Parsed from the string on purpose: a Date
+   * object would shift the day across time zones (UTC midnight in UTC-5). */
+  function fmtDate(iso?: string): string {
+    const m = iso?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    return m ? `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}, ${m[1]}` : (iso ?? '');
   }
+
+  /** Article title: first meaningful line of the thread, minus a leading "1/"
+   * marker (requires a space after the slash, so "1/2 of people" survives)
+   * and minus trailing sentence punctuation. */
+  function deriveTitle(): string {
+    const raw = thread[0]?.text.split('\n').find((l) => l.trim()) ?? '';
+    const cleaned = raw
+      .replace(/^\s*\d{1,3}\/\s+/, '')
+      .trim()
+      .replace(/[。．.!??！？…]+$/, '')
+      .trim();
+    const fallback = threadTitle || 'Thread';
+    if (!cleaned) return fallback;
+    return cleaned.length > 90 ? cleaned.slice(0, 90).replace(/\s+\S*$/, '') + '…' : cleaned;
+  }
+
+  function markdown(): string {
+    const first = thread[0];
+    const lines: string[] = [`# ${deriveTitle()}`, ''];
+    if (first?.handle) {
+      const who = first.author
+        ? `${first.author} ([@${first.handle}](https://x.com/${first.handle}))`
+        : `[@${first.handle}](https://x.com/${first.handle})`;
+      const bits = [who, fmtDate(first.date)];
+      if (first.url) bits.push(`[View on X](${first.url})`);
+      lines.push(bits.filter(Boolean).join(' · '), '');
+    }
+    for (const t of thread) {
+      // reply chains can cross accounts; attribute those posts inline
+      if (t.handle && first?.handle && t.handle !== first.handle) {
+        lines.push(`*${t.author ? `${t.author} ` : ''}(@${t.handle})*`, '');
+      }
+      lines.push(t.text, '');
+      // photos embed as standard Markdown images (permanent CDN links);
+      // videos/GIFs become links, since .md files can't carry video
+      for (const im of t.images ?? []) lines.push(`![media](${im.src})`, '');
+      for (const m of t.media ?? []) {
+        lines.push(m.postUrl ? `[${m.label} — watch on X](${m.postUrl})` : `[${m.label}]`, '');
+      }
+    }
+    lines.push('---', '', '*Unrolled with [TwitterTools](https://twittertools.com) — free X thread reader.*', '');
+    return lines.join('\n');
+  }
+
   function htmlDoc(): string {
     const esc = (s: string) =>
       s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    const first = thread[0];
+    const title = deriveTitle();
+
     const items = thread
       .map((t, i) => {
-        const who = t.handle ? `<span class="who">${esc(t.author ?? '')} (@${esc(t.handle)})</span>` : '';
-        const imgs = (t.images ?? [])
-          .map(
-            (im) =>
-              `<img src="${esc(im.src)}" alt="" referrerpolicy="no-referrer" loading="lazy"${im.w && im.h ? ` width="${im.w}" height="${im.h}"` : ''}>`
-          )
-          .join('');
+        const marker = thread.length > 1 ? `<span class="n">${i + 1}/${thread.length}</span>` : '';
+        const other =
+          t.handle && first.handle && t.handle !== first.handle
+            ? `<p class="other">${esc(t.author ? `${t.author} (@${t.handle})` : `@${t.handle}`)}</p>`
+            : '';
+        const figs = t.images?.length
+          ? `<figure class="imgs${t.images.length === 2 ? ' two' : ''}">` +
+            t.images
+              .map(
+                (im) =>
+                  `<img src="${esc(im.src)}" alt="" referrerpolicy="no-referrer" loading="lazy"${im.w && im.h ? ` width="${im.w}" height="${im.h}"` : ''}>`
+              )
+              .join('') +
+            '</figure>'
+          : '';
         const vids = (t.media ?? [])
           .map((m) => {
             const img = `<img src="${esc(m.poster)}" alt="${esc(m.label)}" referrerpolicy="no-referrer" loading="lazy">`;
@@ -519,10 +604,47 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
               : `<span class="vid">${img}${tag}</span>`;
           })
           .join('');
-        return `<article><h2>${i + 1}/${thread.length} ${who}</h2><p>${esc(t.text).replace(/\n/g, '<br>')}</p>${imgs}${vids}</article>`;
+        return `<section>${marker}${other}<p>${esc(t.text).replace(/\n/g, '<br>')}</p>${figs}${vids}</section>`;
       })
       .join('\n');
-    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(threadTitle)}</title><style>body{font-family:system-ui,sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem;color:#0f1419}article{border:1px solid #e2e8f0;border-radius:12px;padding:1rem;margin-bottom:1rem}h2{font-size:.9rem;margin:0 0 .5rem}h2 .who{font-weight:400;color:#64748b;margin-left:.5rem}p{line-height:1.6;white-space:pre-wrap;margin:0}img{max-width:100%;height:auto;border-radius:8px;margin-top:.5rem}.vid{position:relative;display:block;margin-top:.5rem}.vid img{margin-top:0}.vid .tag{position:absolute;left:.75rem;top:.75rem;background:rgba(0,0,0,.65);color:#fff;font-size:.75rem;padding:.2rem .6rem;border-radius:9999px}footer{color:#94a3b8;font-size:.8rem;margin-top:2rem}</style></head><body><h1>${esc(threadTitle)}</h1>${items}<footer>Unrolled with <a href="https://twittertools.com">TwitterTools</a></footer></body></html>`;
+
+    const avatar = first.avatar
+      ? `<img class="avatar" src="${esc(first.avatar)}" alt="" referrerpolicy="no-referrer" onerror="this.remove()">`
+      : '';
+    const meta = [fmtDate(first.date), thread.length > 1 ? `${thread.length} posts` : '']
+      .filter(Boolean)
+      .join(' · ');
+    const open = first.url
+      ? ` · <a href="${esc(first.url)}" target="_blank" rel="noopener noreferrer">View on X ↗</a>`
+      : '';
+    const byline = first.handle
+      ? `<header class="byline">${avatar}<div><span class="name">${esc(first.author ?? '')}</span> <span class="handle">@${esc(first.handle)}</span><span class="meta">${meta}${open}</span></div></header>`
+      : '';
+
+    return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>
+html{background:#fff;color-scheme:light}
+body{font-family:Georgia,'Times New Roman',serif;font-size:17px;line-height:1.75;color:#1e293b;max-width:42rem;margin:2.5rem auto;padding:0 1.25rem}
+h1{font-family:system-ui,-apple-system,sans-serif;font-size:1.45rem;line-height:1.3;color:#0f1419;margin:0 0 1.1rem}
+.byline{display:flex;align-items:center;gap:.8rem;font-family:system-ui,-apple-system,sans-serif;padding-bottom:1.25rem;border-bottom:1px solid #e2e8f0;margin-bottom:1.6rem}
+.avatar{width:44px;height:44px;border-radius:50%;object-fit:cover;background:#f1f5f9;flex-shrink:0}
+.name{font-weight:600;font-size:.95rem;color:#0f1419}
+.handle{font-size:.9rem;color:#64748b}
+.meta{display:block;font-size:.8rem;color:#94a3b8;margin-top:2px}
+.meta a{color:#64748b;text-decoration:none;border-bottom:1px dotted #cbd5e1}
+section{margin-bottom:1.8rem}
+.n{display:block;font-family:system-ui,-apple-system,sans-serif;font-size:.7rem;letter-spacing:.04em;color:#cbd5e1;margin-bottom:.4rem}
+.other{font-family:system-ui,-apple-system,sans-serif;font-size:.8rem;color:#64748b;margin:0 0 .3rem}
+p{margin:0;white-space:pre-wrap}
+figure.imgs{margin:1rem 0;display:grid;gap:8px}
+figure.imgs.two{grid-template-columns:1fr 1fr}
+figure.imgs img{display:block;width:100%;height:auto;border-radius:10px}
+.vid{position:relative;display:block;margin-top:1rem;border-radius:10px;overflow:hidden}
+.vid img{display:block;width:100%;height:auto}
+.vid .tag{position:absolute;left:.75rem;top:.75rem;background:rgba(0,0,0,.65);color:#fff;font-size:.75rem;padding:.2rem .6rem;border-radius:9999px;font-family:system-ui,-apple-system,sans-serif}
+footer{font-family:system-ui,-apple-system,sans-serif;font-size:.8rem;color:#94a3b8;margin-top:2.5rem;border-top:1px solid #f1f5f9;padding-top:1rem}
+footer a{color:#64748b}
+@media print{section,figure,.vid{break-inside:avoid}body{margin:0}}
+</style></head><body><h1>${esc(title)}</h1>${byline}${items}<footer>Unrolled with <a href="https://twittertools.com">TwitterTools</a> — the independent toolkit for X.</footer></body></html>`;
   }
 
   function download(filename: string, content: string, type: string) {
