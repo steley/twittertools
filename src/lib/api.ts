@@ -66,8 +66,26 @@ export function extractTweetId(input: string): string | null {
   return bare ? bare[1] : null;
 }
 
+/** fetch with a hard timeout: the upstream endpoints have no SLA, and a
+ * stalled request must not leave the user's button spinning forever. Abort
+ * surfaces as a friendly error the pages display verbatim. */
+async function fetchWithTimeout(url: string, timeoutMs = 30_000): Promise<Response> {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { signal: ctrl.signal });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error("X didn't respond in time — please try again in a moment.");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function fetchTweet(id: string): Promise<TweetData> {
-  const res = await fetch(`${API_BASE}/api/tweet?id=${encodeURIComponent(id)}`);
+  const res = await fetchWithTimeout(`${API_BASE}/api/tweet?id=${encodeURIComponent(id)}`);
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw new Error(body?.error ?? `Request failed (${res.status})`);
@@ -77,7 +95,7 @@ export async function fetchTweet(id: string): Promise<TweetData> {
 }
 
 export async function fetchThread(id: string): Promise<ThreadResponse> {
-  const res = await fetch(`${API_BASE}/api/thread?url=${encodeURIComponent(id)}`);
+  const res = await fetchWithTimeout(`${API_BASE}/api/thread?url=${encodeURIComponent(id)}`, 90_000);
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     throw new Error(body?.error ?? `Request failed (${res.status})`);

@@ -225,6 +225,9 @@ class TtlCache:
         while len(self._data) > self.maxsize:
             self._data.popitem(last=False)
 
+    def __len__(self) -> int:
+        return len(self._data)
+
 
 class SlidingWindowLimiter:
     def __init__(self, limit: int, window_seconds: float):
@@ -249,6 +252,45 @@ tweet_cache = TtlCache(TWEET_CACHE_TTL, TWEET_CACHE_SIZE)
 tweet_limiter = SlidingWindowLimiter(*TWEET_RATE)
 download_limiter = SlidingWindowLimiter(*DOWNLOAD_RATE)
 inflight: Dict[str, asyncio.Future] = {}
+
+
+class Stats:
+    """Aggregate counters for /api/healthz. In-memory and anonymous: how the
+    free upstream is holding up (status distribution, latency) and how well
+    the cache absorbs repeat traffic. No IPs, no IDs, no content."""
+
+    def __init__(self) -> None:
+        self.started = time.time()
+        self.responses: Dict[str, Dict[str, int]] = defaultdict(lambda: defaultdict(int))
+        self.upstream: Dict[str, int] = defaultdict(int)
+        self.upstream_ms_total = 0.0
+        self.upstream_calls = 0
+        self.cache_hits = 0
+
+    def note_response(self, endpoint: str, status: int) -> None:
+        self.responses[endpoint][str(status)] += 1
+
+    def note_upstream(self, status: int, ms: float) -> None:
+        self.upstream[str(status)] += 1
+        self.upstream_ms_total += ms
+        self.upstream_calls += 1
+
+    def snapshot(self) -> dict:
+        return {
+            "uptime_s": int(time.time() - self.started),
+            "responses": {ep: dict(c) for ep, c in sorted(self.responses.items())},
+            "upstream_syndication": {
+                "statuses": dict(self.upstream),
+                "calls": self.upstream_calls,
+                "avg_ms": round(self.upstream_ms_total / self.upstream_calls, 1)
+                if self.upstream_calls
+                else None,
+            },
+            "tweet_cache": {"hits": self.cache_hits, "size": len(tweet_cache)},
+        }
+
+
+STATS = Stats()
 
 _token_mode_lock = asyncio.Lock()
 _working_token: Optional[str] = None  # remember which candidate algorithm works
@@ -324,6 +366,14 @@ async def _try_syndication(session: ClientSession, tweet_id: str, token: Optiona
 
 
 async def fetch_syndication(session: ClientSession, tweet_id: str) -> Tuple[int, Optional[dict]]:
+    """Timed wrapper — feeds /api/healthz with the final upstream status."""
+    t0 = time.monotonic()
+    status, data = await _fetch_syndication(session, tweet_id)
+    STATS.note_upstream(status, (time.monotonic() - t0) * 1000)
+    return status, data
+
+
+async def _fetch_syndication(session: ClientSession, tweet_id: str) -> Tuple[int, Optional[dict]]:
     """Fetch one tweet from the syndication endpoint, trying token algorithms."""
     global _working_token
 
@@ -723,6 +773,7 @@ async def api_tweet(request: web.Request) -> web.Response:
 
     cached = tweet_cache.get(tweet_id)
     if cached is not None:
+        STATS.cache_hits += 1
         return web.json_response({"tweet": cached, "cached": True})
 
     fut = inflight.get(tweet_id)
@@ -920,6 +971,11 @@ async def health(request: web.Request) -> web.Response:
     return web.Response(text="ok")
 
 
+async def api_healthz(request: web.Request) -> web.Response:
+    """Aggregate, anonymous counters — how the free upstream is holding up."""
+    return web.json_response(STATS.snapshot())
+
+
 # --------------------------------------------------------------------------- #
 # App wiring                                                                  #
 # --------------------------------------------------------------------------- #
@@ -933,6 +989,15 @@ def cors_for(request: web.Request) -> Dict[str, str]:
     if origin in ALLOWED_ORIGINS:
         return {"Access-Control-Allow-Origin": origin, "Vary": "Origin"}
     return {}
+
+
+@web.middleware
+async def stats_middleware(request: web.Request, handler):
+    """Count API response statuses for /api/healthz (CORS preflight excluded)."""
+    resp = await handler(request)
+    if request.path.startswith("/api/") and request.method != "OPTIONS":
+        STATS.note_response(request.path, resp.status)
+    return resp
 
 
 @web.middleware
@@ -980,11 +1045,12 @@ async def on_startup(app: web.Application) -> None:
 
 
 def create_app() -> web.Application:
-    app = web.Application(middlewares=[cors_middleware])
+    app = web.Application(middlewares=[stats_middleware, cors_middleware])
     app.on_startup.append(on_startup)
     app.router.add_get("/api/tweet", api_tweet)
     app.router.add_get("/api/thread", api_thread)
     app.router.add_get("/api/download", api_download)
+    app.router.add_get("/api/healthz", api_healthz)
     app.router.add_get("/health", health)
     app.router.add_route("*", "/api/{tail:.*}", not_found)
     return app

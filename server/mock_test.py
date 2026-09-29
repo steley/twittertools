@@ -489,6 +489,24 @@ def run_checks():
         str(body[:200]),
     )
 
+    # 20. healthz: aggregate counters reflect the traffic from this run
+    code, _, body = get("/api/healthz")
+    data = json.loads(body)
+    check("healthz 200", code == 200, str(code))
+    tweet_counts = data.get("responses", {}).get("/api/tweet", {})
+    check("healthz counts responses", tweet_counts.get("200", 0) >= 1, str(tweet_counts))
+    upstream = data.get("upstream_syndication", {})
+    check(
+        "healthz upstream stats",
+        upstream.get("calls", 0) >= 1 and "200" in upstream.get("statuses", {}) and upstream.get("avg_ms") is not None,
+        str(upstream),
+    )
+    check(
+        "healthz cache counters",
+        isinstance(data.get("tweet_cache", {}).get("size"), int) and data["tweet_cache"]["hits"] >= 0,
+        str(data.get("tweet_cache")),
+    )
+
     print()
     if failures:
         print("FAILED:", failures)
