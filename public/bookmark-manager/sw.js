@@ -16,7 +16,7 @@
  *
  * Bump CACHE_VERSION to invalidate every cache on the next load.
  */
-const CACHE_VERSION = 'v1';
+const CACHE_VERSION = 'v2';
 const SHELL = `bm-shell-${CACHE_VERSION}`;
 const MEDIA = `bm-media-${CACHE_VERSION}`;
 const MEDIA_TTL = 7 * 24 * 60 * 60 * 1000; // matches the origin's 7-day header
