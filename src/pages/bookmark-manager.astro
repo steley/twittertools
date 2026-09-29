@@ -36,6 +36,10 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
   description="Collect X (Twitter) posts into a private bookmark library stored in your browser. Add from any tool or by URL, organise with tags and notes, export to JSON or Markdown. Free, no sign-up."
   path="/bookmark-manager"
 >
+  <Fragment slot="head">
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#1d9bf0" />
+  </Fragment>
   <ToolHero
     title="X (Twitter) Bookmark Manager"
     subtitle="Collect posts from any tool into a private library stored in your browser. Tag, annotate, export to JSON or Markdown — free, no account, nothing leaves your device."
@@ -77,6 +81,8 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
       Import file…
       <input id="bm-file" type="file" accept=".json,.js,.txt" class="hidden" />
     </label>
+    <button id="bm-install" class="hidden rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white hover:bg-brand-dark">Install app</button>
+    <span id="bm-ios-hint" class="hidden text-xs text-slate-400">Tip: Share → “Add to Home Screen” installs this library as an app with offline access.</span>
     <span class="ml-auto text-xs text-slate-500">Stored locally — export regularly to keep a backup.</span>
   </section>
 
@@ -722,6 +728,34 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  // --- PWA: scoped service worker + install prompt ---------------------------
+  // The worker's scope is /bookmark-manager/ only — no other page is controlled.
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/bookmark-manager/sw.js').catch(() => {});
+  }
+  const installBtn = document.getElementById('bm-install') as HTMLButtonElement;
+  const iosHint = document.getElementById('bm-ios-hint')!;
+  let deferredPrompt: { prompt: () => void; userChoice: Promise<unknown> } | null = null;
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e as unknown as typeof deferredPrompt;
+    installBtn.classList.remove('hidden');
+  });
+  installBtn.addEventListener('click', async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    await deferredPrompt.userChoice.catch(() => undefined);
+    deferredPrompt = null;
+    installBtn.classList.add('hidden');
+  });
+  window.addEventListener('appinstalled', () => installBtn.classList.add('hidden'));
+  const standalone =
+    window.matchMedia('(display-mode: standalone)').matches || ('standalone' in window.navigator && window.navigator.standalone);
+  if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !standalone && !localStorage.getItem('bm-ios-hint-seen')) {
+    iosHint.classList.remove('hidden');
+    localStorage.setItem('bm-ios-hint-seen', '1');
   }
 
   document.getElementById('bm-export-json')!.addEventListener('click', () => {

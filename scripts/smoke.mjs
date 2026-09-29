@@ -57,6 +57,22 @@ for (const [path, selector] of PAGES) {
   await expectVisible(page.locator(selector), `${path} renders ${selector}`);
 }
 
+// 1b. PWA assets for the bookmark app shell
+{
+  await page.goto(BASE + '/bookmark-manager/', { waitUntil: 'domcontentloaded' });
+  const pwa = await page.evaluate(async () => {
+    const m = await fetch('/manifest.webmanifest');
+    const sw = await fetch('/bookmark-manager/sw.js');
+    const i192 = await fetch('/icons/bm-192.png');
+    return { m: m.status, sw: sw.status, i192: i192.status };
+  });
+  if (pwa.m === 200 && pwa.sw === 200 && pwa.i192 === 200) console.log('  ok  pwa assets served (manifest, sw, icon)');
+  else {
+    failures.push('pwa assets');
+    console.log(`FAIL  pwa assets ${JSON.stringify(pwa)}`);
+  }
+}
+
 // 2. video downloader fetches the mock video (API round-trip)
 await page.goto(BASE + '/twitter-video-downloader/', { waitUntil: 'domcontentloaded' });
 await page.fill('#vd-url', 'https://x.com/mockuser/status/111111111111111111');

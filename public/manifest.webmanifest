@@ -1,0 +1,16 @@
+{
+  "name": "TwitterTools Bookmark Manager",
+  "short_name": "Bookmarks",
+  "description": "Your private library of X posts — full-text snapshots, offline, on your device.",
+  "id": "/bookmark-manager/",
+  "start_url": "/bookmark-manager/?source=pwa",
+  "scope": "/bookmark-manager/",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#1d9bf0",
+  "icons": [
+    { "src": "/icons/bm-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/bm-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icons/bm-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
