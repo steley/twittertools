@@ -130,17 +130,62 @@ export function cdnDisplayUrl(url: string, name: 'small' | 'medium' | 'large' = 
   }
 }
 
+/** Networks that can't reach X's CDN exist (and are common for part of the
+ * audience): remember a failed direct attempt for 12h so those visitors stop
+ * paying the per-image probe delay on every page load. Session-level memory
+ * covers re-renders; the localStorage timestamp covers new visits. */
+const DIRECT_BLOCKED_KEY = 'twittertools:cdn-direct-blocked';
+const DIRECT_BLOCKED_TTL = 12 * 3600 * 1000;
+const directFailedHosts = new Set<string>();
+
+export function cdnDirectBlocked(host?: string): boolean {
+  if (host && directFailedHosts.has(host)) return true;
+  try {
+    const ts = Number(localStorage.getItem(DIRECT_BLOCKED_KEY) || 0);
+    return !!ts && Date.now() - ts < DIRECT_BLOCKED_TTL;
+  } catch {
+    return false;
+  }
+}
+
+export function markCdnDirectBlocked(host?: string): void {
+  if (host) directFailedHosts.add(host);
+  try {
+    localStorage.setItem(DIRECT_BLOCKED_KEY, String(Date.now()));
+  } catch {
+    /* private mode */
+  }
+}
+
+export function clearCdnDirectBlocked(): void {
+  directFailedHosts.clear();
+  try {
+    localStorage.removeItem(DIRECT_BLOCKED_KEY);
+  } catch {
+    /* private mode */
+  }
+}
+
 /** Load a media CDN image into an <img>: try the CDN directly (fastest where
  * it is reachable), then fall back to the same-origin proxy when the direct
  * load errors out or stalls past timeoutMs (censored networks blackhole the
  * CDN instead of erroring), so previews still display. The fallback is
- * inline-disposition: iOS Safari refuses to render attachment-served media. */
+ * inline-disposition: iOS Safari refuses to render attachment-served media.
+ * Once a direct failure is on record, subsequent images skip the probe and
+ * load through the proxy immediately. */
 export function wireMediaImg(img: HTMLImageElement, mediaUrl: string, filename: string, timeoutMs = 2500): void {
   img.referrerPolicy = 'no-referrer';
+  let host = '';
+  try {
+    host = new URL(mediaUrl).host;
+  } catch {
+    /* keep host '' — treated as unknown, probe still happens */
+  }
   let swapped = false;
   const swap = () => {
     if (swapped) return;
     swapped = true;
+    markCdnDirectBlocked(host);
     // srcset (direct CDN variants) MUST be dropped: while present, the
     // browser picks candidates from it and ignores src — the proxied swap
     // would never display on networks where the CDN is blocked
@@ -149,6 +194,18 @@ export function wireMediaImg(img: HTMLImageElement, mediaUrl: string, filename: 
     img.src = proxiedDownloadUrl(mediaUrl, filename, true);
   };
   img.onerror = swap;
+  // a direct success proves the CDN is reachable again — back to direct
+  img.addEventListener(
+    'load',
+    () => {
+      if (!swapped) clearCdnDirectBlocked();
+    },
+    { once: true }
+  );
+  if (cdnDirectBlocked(host)) {
+    swap();
+    return;
+  }
   img.src = mediaUrl;
   // lazy images far below the fold haven't started loading — a blind swap
   // here would needlessly pull them through the proxy. Re-check every window

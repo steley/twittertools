@@ -6,7 +6,14 @@
  * Access-Control-Allow-Origin: *) and fall back to our own media proxy,
  * so the canvas never taints and toBlob() always succeeds.
  */
-import { proxiedDownloadUrl, type MediaItem, type TweetData } from './api';
+import {
+  cdnDirectBlocked,
+  clearCdnDirectBlocked,
+  markCdnDirectBlocked,
+  proxiedDownloadUrl,
+  type MediaItem,
+  type TweetData,
+} from './api';
 
 export type CardThemeName = 'light' | 'dark';
 
@@ -143,7 +150,6 @@ function bubble(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, 
 // --- image loading -------------------------------------------------------------
 
 const imgCache = new Map<string, Promise<HTMLImageElement | null>>();
-const directFailedHosts = new Set<string>();
 
 function raceTimeout(p: Promise<HTMLImageElement | null>, ms: number): Promise<HTMLImageElement | null> {
   return Promise.race([p, new Promise<null>((r) => setTimeout(() => r(null), ms))]);
@@ -169,10 +175,13 @@ async function loadImage(url: string): Promise<HTMLImageElement | null> {
       } catch {
         return null;
       }
-      if (!directFailedHosts.has(host)) {
+      if (!cdnDirectBlocked(host)) {
         const direct = await raceTimeout(img(url, true), 2500);
-        if (direct) return direct;
-        directFailedHosts.add(host); // host unreachable/blocked — stop paying the timeout
+        if (direct) {
+          clearCdnDirectBlocked(); // CDN reachable again — back to direct next time
+          return direct;
+        }
+        markCdnDirectBlocked(host); // unreachable/blocked — stop paying the timeout
       }
       // fall back to our same-origin media proxy (never taints the canvas —
       // the proxy always answers with Access-Control-Allow-Origin, so load
