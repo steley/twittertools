@@ -533,7 +533,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
           posts: data.tweets.map((p) => p.text),
           thumb: firstPostThumb(data.tweets),
           savedAt: Date.now(),
-          tags: [first.article ? 'article' : 'thread'],
+          tags: [],
           note: `${data.tweets.length} post${data.tweets.length > 1 ? 's' : ''}`,
         };
         threadSaveBtn?.remove();
