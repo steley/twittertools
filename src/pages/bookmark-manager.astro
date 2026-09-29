@@ -147,7 +147,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
 </Base>
 
 <script>
-  import { cdnDisplayUrl, extractTweetId, fetchTweet, wireMediaImg, type TweetData } from '../lib/api';
+  import { cdnDisplayUrl, extractTweetId, fetchTweet, proxiedDownloadUrl, wireMediaImg, type TweetData } from '../lib/api';
   import {
     clearBookmarks,
     deleteBookmark,
@@ -201,6 +201,9 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
       : item.thumb.startsWith('https://')
         ? [{ type: 'photo', url: item.thumb, width: null, height: null, postUrl: item.url }]
         : [];
+  // legacy entries predate inline media or inline video playback
+  const needsUpgrade = (b: BookmarkItem): boolean =>
+    !b.media?.length || (b.mediaType === 'video' && !b.media.some((m) => m.videoUrl));
 
   // mixed-media posts (video + photos) count toward BOTH categories: they are
   // saved as Video (the primary type) but also match the Photo filter when
@@ -247,6 +250,11 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
       v.className = 'max-h-[80vh] max-w-full';
       if (cardImg) v.poster = cardImg.currentSrc || cardImg.src;
       v.src = m.videoUrl!;
+      // the video CDN is blocked outright on some networks (no stall like
+      // images — a hard error): retry once through the same-origin proxy
+      v.addEventListener('error', () => {
+        if (!v.src.includes('/api/download')) v.src = proxiedDownloadUrl(m.videoUrl!, 'video.mp4');
+      });
       v.addEventListener('click', (e) => e.stopPropagation());
       viewerStage.appendChild(v);
       viewerVideo = v;
@@ -660,15 +668,26 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     let added = 0;
     let dup = 0;
     let failed = 0;
+    let upgraded = 0;
     for (let i = 0; i < batch.length; i++) {
       progress.textContent = `Fetching ${i + 1}/${batch.length}…`;
       try {
-        if (await getBookmark(batch[i])) {
+        const existing = await getBookmark(batch[i]);
+        if (existing && !needsUpgrade(existing)) {
           dup++;
         } else {
           const t = await fetchTweet(batch[i]);
-          await putBookmark(tweetToBookmark(t));
-          added++;
+          const fresh = tweetToBookmark(t);
+          if (existing) {
+            // refresh a legacy entry in place (inline media / video playback),
+            // keeping the user's tags and note
+            fresh.tags = existing.tags;
+            fresh.note = existing.note;
+            upgraded++;
+          } else {
+            added++;
+          }
+          await putBookmark(fresh);
         }
       } catch {
         failed++;
@@ -676,7 +695,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
       await new Promise((r) => setTimeout(r, 1100)); // stay well under the API rate limit
     }
     urlsBox.value = '';
-    progress.textContent = `Added ${added}${dup ? `, ${dup} already saved` : ''}${failed ? `, ${failed} failed` : ''}.`;
+    progress.textContent = `Added ${added}${upgraded ? `, ${upgraded} refreshed` : ''}${dup ? `, ${dup} already saved` : ''}${failed ? `, ${failed} failed` : ''}.`;
     addBtn.disabled = false;
     all = await listBookmarks();
     render();
