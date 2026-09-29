@@ -17,10 +17,15 @@ DIST = pathlib.Path(os.environ.get("DIST_DIR", pathlib.Path(__file__).resolve().
 API_PORT = int(os.environ.get("API_PORT", "8787"))
 DIST_PORT = int(os.environ.get("DIST_PORT", "8080"))
 
+# request headers forwarded to the API (Range matters: <video> seeking needs
+# it to survive the hop, exactly as the production reverse proxy does)
+DROP_HEADERS = {"host", "accept-encoding", "connection", "content-length", "transfer-encoding"}
+
 
 async def proxy(request: web.Request) -> web.Response:
     url = f"http://127.0.0.1:{API_PORT}" + request.rel_url.path_qs
-    async with request.app["session"].get(url) as upstream:
+    headers = {k: v for k, v in request.headers.items() if k.lower() not in DROP_HEADERS}
+    async with request.app["session"].get(url, headers=headers) as upstream:
         body = await upstream.read()
         headers = {k: v for k, v in upstream.headers.items()
                    if k.lower() not in ("content-length", "content-type", "transfer-encoding")}

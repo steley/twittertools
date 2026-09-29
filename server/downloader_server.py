@@ -1014,24 +1014,33 @@ async def api_download(request: web.Request) -> web.StreamResponse:
         return json_error(400, "Only twittertools media hosts (pbs.twimg.com / video.twimg.com) are allowed.")
 
     want_name = request.query.get("name") or ""
+    # <video>-element playback (bookmark viewer): inline disposition (Safari
+    # refuses attachment-disposition media) — and the client's Range header is
+    # forwarded upstream so the timeline can seek (206 passthrough). Plain
+    # downloads keep attachment semantics.
+    inline = request.query.get("play") == "1"
+    range_header = request.headers.get("Range")
 
     timeout = ClientTimeout(total=None, connect=10, sock_read=30)
     try:
         session = request.app["client_session"]
+        upstream_headers = {"User-Agent": USER_AGENT}
+        if range_header:
+            upstream_headers["Range"] = range_header
         # allow_redirects=False: the host allowlist above is the SSRF guard,
         # and following a redirect would bypass it.
         async with session.get(
-            media_url, timeout=timeout, headers={"User-Agent": USER_AGENT}, allow_redirects=False
+            media_url, timeout=timeout, headers=upstream_headers, allow_redirects=False
         ) as upstream:
-            if upstream.status != 200:
+            if upstream.status not in (200, 206):
                 return json_error(503, f"Media fetch failed ({upstream.status}).")
             content_type = upstream.headers.get("Content-Type", "application/octet-stream")
             filename = _safe_filename(want_name, media_url, content_type)
             resp = web.StreamResponse(
-                status=200,
+                status=upstream.status,  # pass a 206 through: players need it to seek
                 headers={
                     "Content-Type": content_type,
-                    "Content-Disposition": f'attachment; filename="{filename}"',
+                    "Content-Disposition": f'{"inline" if inline else "attachment"}; filename="{filename}"',
                     # twimg media URLs are immutable, so proxied media may sit
                     # in the browser cache for a week — repeat views (e.g. the
                     # bookmark library re-rendering) stop hitting the origin.
@@ -1040,9 +1049,14 @@ async def api_download(request: web.Request) -> web.StreamResponse:
                     # flush their headers at prepare(), before the middleware
                     # can touch them.
                     **cors_for(request),
-                    "Access-Control-Expose-Headers": "Content-Disposition, Content-Length",
+                    "Access-Control-Expose-Headers": (
+                        "Content-Disposition, Content-Length, Content-Range, Accept-Ranges"
+                    ),
                 },
             )
+            for h in ("Content-Range", "Accept-Ranges"):
+                if h in upstream.headers:
+                    resp.headers[h] = upstream.headers[h]
             length = upstream.headers.get("Content-Length")
             if length:
                 resp.content_length = int(length)

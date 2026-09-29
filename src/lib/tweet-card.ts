@@ -427,6 +427,208 @@ function badge(ctx: CanvasRenderingContext2D, x: number, y: number, item: MediaI
   ctx.fillText(label, x + 9, y + 15);
 }
 
+// --- thread variant -------------------------------------------------------------
+// Screenshot thread mode: the main card exactly as above, then selected
+// replies appended on the same card with a smaller header and their own
+// media. Dividers separate posts; the footer stays the main post's.
+
+interface PostBlock {
+  post: TweetData;
+  avatar: HTMLImageElement | null;
+  mediaImgs: (HTMLImageElement | null)[];
+  lines: string[];
+  media: { rects: MediaRect[]; height: number };
+  hasMedia: boolean;
+}
+
+async function measurePost(ctx: CanvasRenderingContext2D, post: TweetData): Promise<PostBlock> {
+  const avatarUrl = post.user?.avatar ?? '';
+  const avatar = avatarUrl
+    ? (await loadImage(avatarUrl.replace(/_normal(\.\w+)$/, '_400x400$1'))) ?? (await loadImage(avatarUrl))
+    : null;
+  const mediaItems = post.media.slice(0, 4);
+  const mediaImgs = await Promise.all(mediaItems.map((m) => loadImage(m.url)));
+  const bodyText = stripTrailingMediaLink(post.text, mediaItems.length > 0);
+  ctx.font = `${TEXT_SIZE}px ${FAMILY}`;
+  const lines = bodyText ? wrapText(ctx, bodyText, W - PAD * 2) : [];
+  const aspects = mediaItems.map((m, i) => {
+    const im = mediaImgs[i];
+    return im && im.naturalWidth ? im.naturalWidth / im.naturalHeight : 16 / 9;
+  });
+  return { post, avatar, mediaImgs, lines, media: tileImages(mediaItems.length, W, aspects), hasMedia: mediaItems.length > 0 };
+}
+
+/** Header + text + media of one post from block-top y, returning the block's
+ * bottom edge. Geometry mirrors blockHeight() exactly. */
+function drawPostBody(ctx: CanvasRenderingContext2D, b: PostBlock, y: number, p: Palette, avatarSize: number): number {
+  const headH = Math.max(avatarSize, 24);
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(PAD + avatarSize / 2, y + avatarSize / 2, avatarSize / 2, 0, Math.PI * 2);
+  ctx.clip();
+  if (b.avatar) {
+    drawCover(ctx, b.avatar, PAD, y, avatarSize, avatarSize);
+  } else {
+    ctx.fillStyle = p.placeholder;
+    ctx.fillRect(PAD, y, avatarSize, avatarSize);
+    ctx.fillStyle = p.muted;
+    ctx.font = `600 ${Math.round(avatarSize * 0.42)}px ${FAMILY}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText((b.post.user?.name || '?').trim().charAt(0).toUpperCase(), PAD + avatarSize / 2, y + avatarSize / 2 + 1);
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+  }
+  ctx.restore();
+
+  const nameX = PAD + avatarSize + 12;
+  ctx.fillStyle = p.text;
+  ctx.font = `600 15px ${FAMILY}`;
+  ctx.fillText(b.post.user?.name || 'Unknown', nameX, y + 18);
+  ctx.fillStyle = p.muted;
+  ctx.font = `400 14px ${FAMILY}`;
+  ctx.fillText('@' + (b.post.user?.screenName || 'unknown'), nameX, y + 37);
+
+  let cy = y + headH + 14; // content top
+  if (b.lines.length) {
+    ctx.fillStyle = p.text;
+    ctx.font = `${TEXT_SIZE}px ${FAMILY}`;
+    let ty = cy + TEXT_SIZE - 4;
+    for (const line of b.lines) {
+      ctx.fillText(line, PAD, ty);
+      ty += LINE_H;
+    }
+    cy += b.lines.length * LINE_H;
+  }
+  if (b.hasMedia) {
+    const top = cy + 18;
+    b.media.rects.forEach((r, i) => {
+      const x = PAD + r.x;
+      ctx.save();
+      rr(ctx, x, top + r.y, r.w, r.h, 14);
+      ctx.clip();
+      ctx.fillStyle = p.placeholder;
+      ctx.fillRect(x, top + r.y, r.w, r.h);
+      const img = b.mediaImgs[i];
+      if (img) drawContain(ctx, img, x, top + r.y, r.w, r.h);
+      ctx.restore();
+      if (i === 0 && b.post.media[0].type !== 'photo') badge(ctx, x + 10, top + r.y + 10, b.post.media[0], p);
+    });
+    cy = top + b.media.height;
+  }
+  return y + blockHeight(b, avatarSize);
+}
+
+function blockHeight(b: PostBlock, avatarSize: number): number {
+  const headH = Math.max(avatarSize, 24);
+  let h = headH + 14;
+  if (b.lines.length) h += b.lines.length * LINE_H;
+  if (b.hasMedia) h += 18 + b.media.height;
+  return h;
+}
+
+/** Main post + replies on one tall card. `replies` is the already-selected
+ * list (the page unticks excluded ones before calling). */
+export async function renderThreadCard(
+  canvas: HTMLCanvasElement,
+  main: TweetData,
+  replies: TweetData[],
+  theme: CardThemeName,
+): Promise<void> {
+  const p = PALETTES[theme];
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas not supported in this browser.');
+
+  const mainBlock = await measurePost(ctx, main);
+  const replyBlocks = await Promise.all(replies.map((r) => measurePost(ctx, r)));
+
+  // layout: main block + permalink + divider, then per reply (gap + block +
+  // divider), then the footer
+  const mainBottom = PAD + blockHeight(mainBlock, AVATAR);
+  let h = mainBottom + 20 + 13; // permalink line + divider
+  for (const b of replyBlocks) h += 18 + blockHeight(b, 32) + 18;
+  const footY = h;
+  const baseY = footY + 24;
+  const H = Math.round(baseY + PAD);
+
+  canvas.width = W * SCALE;
+  canvas.height = H * SCALE;
+  ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  rr(ctx, 0.5, 0.5, W - 1, H - 1, 20);
+  ctx.fillStyle = p.card;
+  ctx.fill();
+  ctx.strokeStyle = p.border;
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  ctx.save();
+  rr(ctx, 0, 0, W, H, 20);
+  ctx.clip();
+
+  const mainDrawn = drawPostBody(ctx, mainBlock, PAD, p, AVATAR);
+
+  // main post permalink, then divider
+  ctx.fillStyle = p.muted;
+  ctx.font = `400 13px ${FAMILY}`;
+  ctx.fillText(mainBlock.post.url || `https://x.com/i/status/${mainBlock.post.id}`, PAD, mainDrawn + 20);
+  let divider = mainDrawn + 33;
+
+  for (const b of replyBlocks) {
+    ctx.strokeStyle = p.divider;
+    ctx.beginPath();
+    ctx.moveTo(PAD, divider + 0.5);
+    ctx.lineTo(W - PAD, divider + 0.5);
+    ctx.stroke();
+    const bottom = drawPostBody(ctx, b, divider + 18, p, 32);
+    divider = bottom + 18;
+  }
+
+  // footer divider (footY matches the measure pass) + date/engagement/watermark
+  // of the main post
+  ctx.strokeStyle = p.divider;
+  ctx.beginPath();
+  ctx.moveTo(PAD, footY + 0.5);
+  ctx.lineTo(W - PAD, footY + 0.5);
+  ctx.stroke();
+
+  ctx.fillStyle = p.muted;
+  ctx.font = `400 13px ${FAMILY}`;
+  let fx = PAD;
+  const date = fmtDate(mainBlock.post.createdAt);
+  if (date) {
+    ctx.fillText(date, fx, baseY);
+    fx += ctx.measureText(date).width + 14;
+  }
+  ctx.lineWidth = 1.4;
+  if (mainBlock.post.likes != null) {
+    heart(ctx, fx + 5, baseY - 10, 13, p.muted);
+    const s = String(mainBlock.post.likes);
+    ctx.fillStyle = p.muted;
+    ctx.fillText(s, fx + 22, baseY);
+    fx += 22 + ctx.measureText(s).width + 14;
+  }
+  if (mainBlock.post.replies != null) {
+    bubble(ctx, fx + 5, baseY - 10, 13, p.muted);
+    const s = String(mainBlock.post.replies);
+    ctx.fillStyle = p.muted;
+    ctx.fillText(s, fx + 22, baseY);
+  }
+
+  const wmA = 'made with ';
+  const wmB = 'twittertools.com';
+  ctx.font = `600 13px ${FAMILY}`;
+  const bWidth = ctx.measureText(wmB).width;
+  const bX = W - PAD - bWidth;
+  ctx.fillStyle = BRAND;
+  ctx.fillText(wmB, bX, baseY);
+  ctx.font = `400 13px ${FAMILY}`;
+  ctx.fillStyle = p.muted;
+  ctx.fillText(wmA, bX - ctx.measureText(wmA).width, baseY);
+
+  ctx.restore();
+}
+
 /** Export the rendered card as a PNG download. Resolves false if the browser
  * refuses (tainted canvas) — callers should surface that to the user. */
 export function downloadCard(canvas: HTMLCanvasElement, filename: string): Promise<boolean> {

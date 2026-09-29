@@ -15,6 +15,10 @@ const faq = [
     a: 'Yes. Up to four photos from the post are shown in full inside the card — nothing gets cropped. For videos and GIFs the card shows the thumbnail frame with a badge — use the Video Downloader if you need the actual file.',
   },
   {
+    q: 'Can I include replies in the card?',
+    a: 'Yes — that is the thread mode. Paste one link per line: the first link becomes the main card, every further link is appended as a reply underneath (up to 9). After fetching, untick any reply you don\'t want and the image re-renders without it.',
+  },
+  {
     q: 'What size and quality is the export?',
     a: 'The PNG exports at 2x resolution (about 1200px wide), so it stays crisp on retina displays and in presentations. Corners are transparent, so the card drops nicely onto any background.',
   },
@@ -43,17 +47,16 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').sl
 
   <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
     <form id="ss-form" class="flex flex-col gap-3 sm:flex-row">
-      <input
+      <textarea
         id="ss-url"
-        aria-label="Post URL"
-        type="text"
-        inputmode="url"
-        class="w-full flex-1 rounded-xl border border-slate-300 px-4 py-3 font-mono text-sm focus:border-brand focus:outline-none"
-        placeholder="https://x.com/username/status/1234567890123456789"
+        aria-label="Post URL or post + reply links"
+        rows="2"
+        class="w-full flex-1 rounded-xl border border-slate-300 p-4 font-mono text-sm leading-relaxed focus:border-brand focus:outline-none"
+        placeholder={'https://x.com/username/status/1234567890123456789\n…paste further links to append replies'}
         autocomplete="off"
         spellcheck="false"
         required
-      />
+      ></textarea>
       <button
         type="submit"
         id="ss-btn"
@@ -63,7 +66,8 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').sl
       </button>
     </form>
     <p class="mt-2 text-xs text-slate-400">
-      Works with x.com and twitter.com links. Only public posts can be processed.
+      The first link is the card. Any further links (one per line) are appended as replies —
+      untick the ones you don't want after fetching. Only public posts can be processed.
     </p>
 
     <div id="ss-error" class="mt-4 hidden rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600"></div>
@@ -103,6 +107,7 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').sl
         <p class="mt-1 font-medium">Fetch the post</p>
         <p class="mt-1 text-sm text-slate-600">
           The post is rendered as a clean card with avatar, text, photos, date and engagement.
+          Paste further links to append replies as a thread.
         </p>
       </li>
       <li class="rounded-2xl border border-slate-200 bg-white p-5">
@@ -135,13 +140,13 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').sl
 </Base>
 
 <script>
-  import type { TweetData } from '../lib/api';
+  import { extractTweetId, fetchTweet, type TweetData } from '../lib/api';
   import { bookmarkToggleButton, tweetToBookmark } from '../lib/bookmark-store';
-  import { el, renderTweetHeader, wireFetcher } from '../lib/media-page';
-  import { downloadCard, renderTweetCard, type CardThemeName } from '../lib/tweet-card';
+  import { el, renderTweetHeader } from '../lib/media-page';
+  import { downloadCard, renderThreadCard, renderTweetCard, type CardThemeName } from '../lib/tweet-card';
 
   const form = document.getElementById('ss-form') as HTMLFormElement;
-  const urlInput = document.getElementById('ss-url') as HTMLInputElement;
+  const urlInput = document.getElementById('ss-url') as HTMLTextAreaElement;
   const btn = document.getElementById('ss-btn') as HTMLButtonElement;
   const errorBox = document.getElementById('ss-error')!;
   const tweetBox = document.getElementById('ss-tweet')!;
@@ -151,7 +156,9 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').sl
   const themeLight = document.getElementById('ss-theme-light') as HTMLButtonElement;
   const themeDark = document.getElementById('ss-theme-dark') as HTMLButtonElement;
 
-  let tweet: TweetData | null = null;
+  let main: TweetData | null = null;
+  let replies: TweetData[] = [];
+  const excluded = new Set<string>(); // unticked reply ids — left out of the render
   let theme: CardThemeName = 'light';
 
   function setTheme(name: CardThemeName) {
@@ -165,15 +172,17 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').sl
         'ss-theme rounded-full px-4 py-2 text-sm font-medium ' +
         (active ? 'bg-brand text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200');
     }
-    if (tweet) draw();
+    if (main) draw();
   }
 
   async function draw() {
-    if (!tweet) return;
+    if (!main) return;
     dlBtn.disabled = true;
     dlBtn.textContent = 'Rendering…';
     try {
-      await renderTweetCard(canvas, tweet, theme);
+      const active = replies.filter((r) => !excluded.has(r.id));
+      if (active.length) await renderThreadCard(canvas, main, active, theme);
+      else await renderTweetCard(canvas, main, theme);
       canvas.classList.remove('hidden');
       controls.classList.remove('hidden');
       controls.classList.add('flex');
@@ -187,8 +196,11 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').sl
   themeDark.addEventListener('click', () => setTheme('dark'));
 
   dlBtn.addEventListener('click', async () => {
-    if (!tweet) return;
-    const ok = await downloadCard(canvas, `tweet-${tweet.id}-${theme}.png`);
+    if (!main) return;
+    const ok = await downloadCard(
+      canvas,
+      `tweet-${main.id}${replies.length ? '-thread' : ''}-${theme}.png`
+    );
     const old = dlBtn.textContent;
     dlBtn.textContent = ok ? '✓ Saved' : 'Export failed';
     setTimeout(() => (dlBtn.textContent = old), 1500);
@@ -198,26 +210,115 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').sl
     }
   });
 
-  wireFetcher({
-    form,
-    input: urlInput,
-    button: btn,
-    errorBox,
-    busyLabel: 'Fetching…',
-    render: (t) => {
-      tweet = t;
-      const card = el('div', 'rounded-xl border border-slate-200 p-4');
-      card.appendChild(renderTweetHeader(t));
-      if (t.text) {
-        const text = el('p', 'mt-3 line-clamp-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700');
-        text.textContent = t.text;
-        card.appendChild(text);
+  /** Main card + reply rows with include/exclude checkboxes; every toggle
+   * re-renders the canvas. */
+  function renderPreview() {
+    if (!main) return;
+    const card = el('div', 'rounded-xl border border-slate-200 p-4');
+    card.appendChild(renderTweetHeader(main));
+    if (main.text) {
+      const text = el('p', 'mt-3 line-clamp-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700');
+      text.textContent = main.text;
+      card.appendChild(text);
+    }
+    const actions = el('div', 'mt-3');
+    actions.appendChild(bookmarkToggleButton(tweetToBookmark(main)));
+    card.appendChild(actions);
+    tweetBox.replaceChildren(card);
+
+    if (!replies.length) return;
+    const wrap = el('div', 'mt-4 rounded-xl border border-slate-200 p-4');
+    const label = el('p', 'text-xs font-medium text-slate-500');
+    label.textContent = 'Replies included in the card — untick to drop:';
+    wrap.appendChild(label);
+    replies.forEach((r) => {
+      const row = el('label', 'mt-3 flex cursor-pointer items-start gap-3');
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = !excluded.has(r.id);
+      cb.className = 'mt-1 h-4 w-4 shrink-0 accent-brand';
+      cb.addEventListener('change', () => {
+        if (cb.checked) excluded.delete(r.id);
+        else excluded.add(r.id);
+        row.classList.toggle('opacity-40', !cb.checked);
+        draw();
+      });
+      row.appendChild(cb);
+      const who = el('div', 'min-w-0');
+      const name = el('p', 'truncate text-sm font-medium text-slate-800');
+      name.textContent = `${r.user?.name ?? 'Unknown'} @${r.user?.screenName ?? '?'}`;
+      const text = el('p', 'mt-0.5 line-clamp-1 text-xs text-slate-500');
+      text.textContent = r.text;
+      who.append(name, text);
+      row.appendChild(who);
+      wrap.appendChild(row);
+    });
+    tweetBox.appendChild(wrap);
+  }
+
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    errorBox.classList.add('hidden');
+    // first link = the card, the rest = replies to append; duplicates collapse
+    const ids: string[] = [];
+    for (const line of urlInput.value.split('\n')) {
+      const id = extractTweetId(line);
+      if (id && !ids.includes(id)) ids.push(id);
+    }
+    if (!ids.length) {
+      errorBox.textContent = "That doesn't look like a post link. Paste something like https://x.com/user/status/123…";
+      errorBox.classList.remove('hidden');
+      return;
+    }
+    const batch = ids.slice(0, 10); // main + up to 9 replies — bounds the card height
+    const idle = btn.textContent ?? 'Fetch';
+    btn.disabled = true;
+    canvas.classList.add('hidden');
+    controls.classList.add('hidden');
+    main = null;
+    replies = [];
+    excluded.clear();
+    let failed = 0;
+    try {
+      for (let i = 0; i < batch.length; i++) {
+        btn.textContent = `Fetching ${i + 1}/${batch.length}…`;
+        try {
+          const t = await fetchTweet(batch[i]);
+          if (!main) main = t;
+          else replies.push(t);
+        } catch (err) {
+          if (!main) {
+            errorBox.textContent =
+              (err instanceof Error ? err.message : 'Fetching failed.') +
+              " The first link must load — it becomes the card.";
+            errorBox.classList.remove('hidden');
+            return;
+          }
+          failed++;
+        }
+        if (i < batch.length - 1) await sleep(1100); // stay under the API rate limit
       }
-      const actions = el('div', 'mt-3');
-      actions.appendChild(bookmarkToggleButton(tweetToBookmark(t)));
-      card.appendChild(actions);
-      tweetBox.replaceChildren(card);
-      draw();
-    },
+      renderPreview();
+      await draw();
+      const notes: string[] = [];
+      if (failed) notes.push(`Fetched ${replies.length} of ${batch.length - 1} replies — the rest failed.`);
+      if (ids.length > 10) notes.push('Only the first 10 links were read.');
+      if (notes.length) {
+        errorBox.textContent = notes.join(' ');
+        errorBox.classList.remove('hidden');
+      }
+    } finally {
+      btn.disabled = false;
+      btn.textContent = idle;
+    }
   });
+
+  // Deep link support (e.g. from the homepage router): /tool?url=<post url>
+  const deepLink = new URLSearchParams(window.location.search).get('url');
+  if (deepLink && extractTweetId(deepLink)) {
+    urlInput.value = deepLink;
+    form.requestSubmit();
+  }
 </script>

@@ -199,7 +199,7 @@ sudo nginx -t && sudo systemctl reload nginx
   from `src/lib/tools.ts`. Edit → `npm run build` → rsync `dist/`.
 - Ad slots are placeholder `<AdSlot />` components — paste an AdSense snippet inside
   `src/components/AdSlot.astro` when approved and rebuild.
-- Contact addresses `contact@` / `dmca@twittertools.com` (in `privacy.astro` /
+- Contact addresses `hello@` / `dmca@twittertools.com` (in `privacy.astro` /
   `terms.astro`) are live mailboxes — keep them monitored.
 - Social card: edit `scripts/gen_og.py`, run `python3 scripts/gen_og.py`.
 

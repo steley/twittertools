@@ -251,9 +251,11 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
       if (cardImg) v.poster = cardImg.currentSrc || cardImg.src;
       v.src = m.videoUrl!;
       // the video CDN is blocked outright on some networks (no stall like
-      // images — a hard error): retry once through the same-origin proxy
+      // images — a hard error): retry once through the same-origin proxy;
+      // play=1 gives inline disposition + Range passthrough, so the
+      // timeline scrubs even on the fallback
       v.addEventListener('error', () => {
-        if (!v.src.includes('/api/download')) v.src = proxiedDownloadUrl(m.videoUrl!, 'video.mp4');
+        if (!v.src.includes('/api/download')) v.src = proxiedDownloadUrl(m.videoUrl!, 'video.mp4', true);
       });
       v.addEventListener('click', (e) => e.stopPropagation());
       viewerStage.appendChild(v);

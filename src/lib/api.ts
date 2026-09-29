@@ -103,9 +103,12 @@ export async function fetchThread(id: string): Promise<ThreadResponse> {
   return (await res.json()) as ThreadResponse;
 }
 
-/** Build a proxied download URL that forces a file download with a nice name. */
-export function proxiedDownloadUrl(mediaUrl: string, filename: string): string {
+/** Build a proxied download URL that forces a file download with a nice name.
+ * `inline` switches to Content-Disposition: inline + Range passthrough —
+ * what <video>-element playback needs (Safari refuses attachment media). */
+export function proxiedDownloadUrl(mediaUrl: string, filename: string, inline = false): string {
   const params = new URLSearchParams({ url: mediaUrl, name: filename });
+  if (inline) params.set('play', '1');
   return `${API_BASE}/api/download?${params.toString()}`;
 }
 

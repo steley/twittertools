@@ -204,6 +204,18 @@ async def mock_graphql(request):
 
 async def mock_media(request):
     payload = b"FAKEMP4BYTES" * 1000
+    rng = request.headers.get("Range")
+    if rng:  # bytes=start-end — enough for asserting proxy passthrough
+        _, _, spec = rng.partition("=")
+        start_s, _, end_s = spec.partition("-")
+        start = int(start_s or 0)
+        end = int(end_s) if end_s else len(payload) - 1
+        return web.Response(
+            status=206,
+            body=payload[start : end + 1],
+            content_type="video/mp4",
+            headers={"Content-Range": f"bytes {start}-{end}/{len(payload)}", "Accept-Ranges": "bytes"},
+        )
     return web.Response(body=payload, content_type="video/mp4")
 
 
@@ -345,6 +357,19 @@ def run_checks():
     check("download 200", code == 200, str(code))
     check("download attachment", "attachment" in headers.get("Content-Disposition", ""), str(headers.get("Content-Disposition")))
     check("download bytes", b"FAKEMP4BYTES" in body)
+
+    # 5b. Range passthrough: <video> seeking needs 206 + Content-Range, and
+    # play=1 switches the disposition to inline (Safari-safe playback)
+    code, headers, body = get(
+        "/api/download?url=http://127.0.0.1:8899/video-832.mp4&name=v.mp4&play=1",
+        headers={"Range": "bytes=4-13"},
+    )
+    check("download range 206", code == 206, str(code))
+    check("download range content-range", headers.get("Content-Range", "").startswith("bytes 4-13/"), str(headers.get("Content-Range")))
+    check("download range slice", body == (b"FAKEMP4BYTES" * 1000)[4:14], repr(body[:12]))
+    check("download inline disposition", "inline" in headers.get("Content-Disposition", ""), str(headers.get("Content-Disposition")))
+    code, headers, _ = get("/api/download?url=http://127.0.0.1:8899/video-832.mp4&name=v.mp4", headers={"Range": "bytes=4-13"})
+    check("download without play stays attachment", "attachment" in headers.get("Content-Disposition", ""), str(headers.get("Content-Disposition")))
 
     # 6. download host allowlist
     code, _, body = get("/api/download?url=http://evil.example.com/x.mp4&name=x.mp4")
