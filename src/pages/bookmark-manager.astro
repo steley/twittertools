@@ -202,11 +202,20 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
         ? [{ type: 'photo', url: item.thumb, width: null, height: null, postUrl: item.url }]
         : [];
 
+  // mixed-media posts (video + photos) count toward BOTH categories: they are
+  // saved as Video (the primary type) but also match the Photo filter when
+  // their media actually contains photos
+  const matchesType = (b: BookmarkItem, t: BookmarkType | 'all'): boolean => {
+    if (t === 'all') return true;
+    if (b.mediaType === t) return true;
+    return t === 'photo' && b.mediaType === 'video' && (b.media ?? []).some((m) => m.type === 'photo');
+  };
+
   // --- filtering ----------------------------------------------------------
   function visible(): BookmarkItem[] {
     const q = query.trim().toLowerCase();
     return all.filter((b) => {
-      if (typeFilter !== 'all' && b.mediaType !== typeFilter) return false;
+      if (!matchesType(b, typeFilter)) return false;
       if (tagFilter && !b.tags.includes(tagFilter)) return false;
       if (!q) return true;
       return [b.text, b.author, b.handle, b.note, b.tags.join(' ')].join(' ').toLowerCase().includes(q);
@@ -218,7 +227,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     const types: (BookmarkType | 'all')[] = ['all', 'video', 'photo', 'article', 'thread', 'text'];
     typesBox.replaceChildren();
     for (const t of types) {
-      const count = t === 'all' ? all.length : all.filter((b) => b.mediaType === t).length;
+      const count = t === 'all' ? all.length : all.filter((b) => matchesType(b, t)).length;
       const b = el(
         'button',
         'rounded-full px-3 py-1.5 text-xs font-medium ' +
