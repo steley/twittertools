@@ -1,0 +1,212 @@
+---
+import Base from '../layouts/Base.astro';
+import ToolHero from '../components/ToolHero.astro';
+import Faq from '../components/Faq.astro';
+import AdSlot from '../components/AdSlot.astro';
+import { TOOLS } from '../lib/tools';
+
+const faq = [
+  {
+    q: 'How does the splitter decide where to break?',
+    a: 'It packs as much as possible into every 280-character post, cutting first at sentence ends (both Latin and CJK punctuation), then at line breaks, then between words. A URL never gets cut in half — every link counts as its 23-character t.co weight and always stays whole.',
+  },
+  {
+    q: 'Does the "1/ 2/ 3/" numbering count against the limit?',
+    a: 'Yes, and the splitter reserves space for it: with numbering on, each post keeps a 5-character budget for the prefix, so even a 100-part thread stays within X\'s weighted limit. Turn numbering off if you prefer clean parts.',
+  },
+  {
+    q: 'How do I post the thread?',
+    a: 'Copy each part and paste it into a new post, in order — the Copy button on every card grabs exactly one part. "Copy all" copies everything separated by --- lines, which the Paste mode of our Thread Reader understands if you want to preview or export the thread first.',
+  },
+  {
+    q: 'Does it count characters the way X does?',
+    a: 'Yes — the same engine as our Character Counter: CJK characters and emoji weigh 2, every link weighs exactly 23, everything else weighs 1. Each part shows its own weighted count out of 280.',
+  },
+  {
+    q: 'Is my text uploaded anywhere?',
+    a: 'No. Splitting runs entirely in your browser — nothing is sent to any server, there is no account, and nothing is stored.',
+  },
+];
+
+const related = TOOLS.filter((t) => t.slug !== '/tweet-splitter').slice(0, 3);
+---
+
+<Base
+  title="Tweet Splitter — Break Long Text into a Numbered Thread | Free"
+  description="Paste long text and split it into 280-character posts with 1/ 2/ 3/ numbering. CJK and link aware, cuts at sentences, copy each part. Free, runs in your browser."
+  path="/tweet-splitter"
+>
+  <ToolHero
+    title="Tweet Splitter"
+    subtitle="Paste long text — get a numbered thread of 280-character posts, cut at sentences and copy-ready. Works with X's real counting rules, free, in your browser."
+  />
+
+  <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
+    <label for="sp-input" class="mb-2 block text-sm font-medium text-slate-700">
+      Your long text — sentences, paragraphs and links are preserved
+    </label>
+    <textarea
+      id="sp-input"
+      aria-label="Text to split"
+      rows="8"
+      class="w-full resize-y rounded-xl border border-slate-300 p-4 text-base leading-relaxed focus:border-brand focus:outline-none"
+      placeholder="Paste the long text you want to turn into a thread…"
+    ></textarea>
+    <div class="mt-3 flex flex-wrap items-center gap-4">
+      <label class="flex items-center gap-2 text-sm text-slate-600">
+        <input id="sp-numbering" type="checkbox" checked class="h-4 w-4 accent-brand" />
+        Add <code class="rounded bg-slate-100 px-1">1/ 2/ 3/</code> numbering
+      </label>
+      <span id="sp-summary" class="text-xs text-slate-400"></span>
+    </div>
+
+    <div id="sp-result" class="mt-5 space-y-3"></div>
+
+    <div id="sp-actions" class="mt-5 hidden flex-wrap items-center gap-2">
+      <button
+        id="sp-copy-all"
+        class="rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand"
+        >Copy all</button
+      >
+      <button
+        id="sp-open-reader"
+        class="rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white hover:bg-brand-dark"
+        >Open in Thread Reader →</button
+      >
+    </div>
+  </section>
+
+  <AdSlot />
+
+  <section class="mt-12">
+    <h2 class="text-xl font-bold">How to split a long post into a thread</h2>
+    <ol class="mt-4 grid gap-4 sm:grid-cols-3">
+      <li class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="text-sm font-bold text-brand">Step 1</p>
+        <p class="mt-1 font-medium">Paste your text</p>
+        <p class="mt-1 text-sm text-slate-600">
+          Write or paste the full text — no 280-character juggling while you draft.
+        </p>
+      </li>
+      <li class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="text-sm font-bold text-brand">Step 2</p>
+        <p class="mt-1 font-medium">Get numbered parts</p>
+        <p class="mt-1 text-sm text-slate-600">
+          The splitter cuts at sentences, never inside links, and numbers every post — each one
+          shown with its own weighted count.
+        </p>
+      </li>
+      <li class="rounded-2xl border border-slate-200 bg-white p-5">
+        <p class="text-sm font-bold text-brand">Step 3</p>
+        <p class="mt-1 font-medium">Copy and post in order</p>
+        <p class="mt-1 text-sm text-slate-600">
+          Copy part 1, post it, copy part 2, reply to yourself — or hand the thread to the Thread
+          Reader for preview and exports.
+        </p>
+      </li>
+    </ol>
+  </section>
+
+  <Faq items={faq} />
+
+  <section class="mt-12">
+    <h2 class="text-xl font-bold">Related tools</h2>
+    <ul class="mt-4 grid gap-3 sm:grid-cols-3">
+      {
+        related.map((t) => (
+          <li>
+            <a href={t.slug} class="block rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium hover:border-brand">
+              {t.name} <span class="text-slate-400">→</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</Base>
+
+<script>
+  import { countTweet } from '../lib/tweet-count';
+  import { joinForReader, splitThread } from '../lib/tweet-split';
+  import { el } from '../lib/media-page';
+
+  const input = document.getElementById('sp-input') as HTMLTextAreaElement;
+  const numbering = document.getElementById('sp-numbering') as HTMLInputElement;
+  const resultBox = document.getElementById('sp-result')!;
+  const summary = document.getElementById('sp-summary')!;
+  const actions = document.getElementById('sp-actions')!;
+  const copyAllBtn = document.getElementById('sp-copy-all') as HTMLButtonElement;
+  const openReaderBtn = document.getElementById('sp-open-reader') as HTMLButtonElement;
+
+  let parts: string[] = [];
+
+  function render() {
+    parts = splitThread(input.value, numbering.checked);
+    resultBox.replaceChildren();
+    if (!parts.length) {
+      summary.textContent = '';
+      actions.classList.add('hidden');
+      actions.classList.remove('flex');
+      return;
+    }
+    const total = countTweet(input.value).weightedLength;
+    summary.textContent = `${total} characters → ${parts.length} post${parts.length > 1 ? 's' : ''}`;
+    parts.forEach((part, i) => {
+      const card = el('div', 'rounded-xl border border-slate-200 p-4');
+      const head = el('div', 'flex items-center justify-between gap-3');
+      const idx = el('span', 'text-xs font-semibold text-brand tabular-nums');
+      idx.textContent = `${i + 1}/${parts.length}`;
+      const meta = el('span', 'text-[11px] tabular-nums text-slate-400');
+      meta.textContent = `${countTweet(part).weightedLength}/280`;
+      head.append(idx, meta);
+      const body = el('p', 'mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-800');
+      body.textContent = part;
+      const copy = el(
+        'button',
+        'sp-copy mt-3 rounded-full border border-slate-300 px-4 py-1.5 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand'
+      ) as HTMLButtonElement;
+      copy.type = 'button';
+      copy.textContent = 'Copy';
+      copy.addEventListener('click', async () => {
+        await navigator.clipboard.writeText(part);
+        copy.textContent = '✓ Copied';
+        setTimeout(() => (copy.textContent = 'Copy'), 1200);
+      });
+      card.append(head, body, copy);
+      resultBox.appendChild(card);
+    });
+    actions.classList.remove('hidden');
+    actions.classList.add('flex');
+    copyAllBtn.textContent = `Copy all (${parts.length} posts)`;
+  }
+
+  copyAllBtn.addEventListener('click', async () => {
+    await navigator.clipboard.writeText(joinForReader(parts));
+    copyAllBtn.textContent = '✓ Copied';
+    setTimeout(() => copyAllBtn.textContent = `Copy all (${parts.length} posts)`, 1500);
+  });
+
+  // Handoff from the Character Counter ("Split into a thread")
+  try {
+    const handoff = sessionStorage.getItem('twittertools:split-text');
+    if (handoff) {
+      sessionStorage.removeItem('twittertools:split-text');
+      input.value = handoff;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  let debounce: ReturnType<typeof setTimeout>;
+  input.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(render, 200);
+  });
+  numbering.addEventListener('change', render);
+  render();
+
+  openReaderBtn.addEventListener('click', () => {
+    sessionStorage.setItem('twittertools:tr-text', joinForReader(parts));
+    window.location.href = '/twitter-thread-reader/';
+  });
+</script>

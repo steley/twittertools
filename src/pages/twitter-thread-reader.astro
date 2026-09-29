@@ -985,6 +985,20 @@ footer a{color:#64748b}
     });
   });
 
+  // Handoff from the Tweet Splitter ("Open in Thread Reader"): paste-format
+  // text lands in the Paste mode and unrolls immediately
+  try {
+    const handoffText = sessionStorage.getItem('twittertools:tr-text');
+    if (handoffText) {
+      sessionStorage.removeItem('twittertools:tr-text');
+      setMode('paste');
+      textarea.value = handoffText;
+      pasteBtn.click();
+    }
+  } catch {
+    /* ignore */
+  }
+
   // Deep link support (e.g. from the homepage router): /twitter-thread-reader?url=<post url>
   const deepLink = new URLSearchParams(window.location.search).get('url');
   if (deepLink && extractTweetId(deepLink)) {

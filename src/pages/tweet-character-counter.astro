@@ -60,7 +60,21 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-character-counter').slice
         <span class="rounded-full bg-slate-100 px-3 py-1 text-slate-600">Double-weight (CJK/emoji): <b id="cc-heavy" class="tabular-nums">0</b></span>
         <span class="rounded-full bg-slate-100 px-3 py-1 text-slate-600">Remaining: <b id="cc-left" class="tabular-nums">280</b></span>
       </div>
+      <button
+        id="cc-split"
+        class="mt-4 hidden rounded-full border border-brand px-4 py-2 text-xs font-semibold text-brand hover:bg-brand hover:text-white"
+        >Over the limit? Split it into a thread →</button>
     </div>
+  </section>
+
+  <section class="mt-8 rounded-2xl border border-slate-200 bg-white p-5">
+    <p class="text-sm font-semibold">Writing toolkit</p>
+    <p class="mt-1 text-sm text-slate-600">
+      Count it here —
+      <a class="font-medium text-brand hover:underline" href="/tweet-splitter">split it into a thread</a> —
+      style it with the
+      <a class="font-medium text-brand hover:underline" href="/twitter-font-generator">Font Generator</a>.
+    </p>
   </section>
 
   <AdSlot />
@@ -171,7 +185,16 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-character-counter').slice
       ? `of ${r.limit} characters`
       : `${-r.remaining} characters over the limit`;
     state.className = 'text-sm ' + (!r.valid ? 'font-medium text-red-500' : 'text-slate-500');
+
+    const splitBtn = document.getElementById('cc-split') as HTMLButtonElement | null;
+    if (splitBtn) splitBtn.classList.toggle('hidden', r.valid || !textarea.value.trim());
   }
+
+  const splitBtn = document.getElementById('cc-split') as HTMLButtonElement | null;
+  splitBtn?.addEventListener('click', () => {
+    sessionStorage.setItem('twittertools:split-text', textarea.value);
+    window.location.href = '/tweet-splitter/';
+  });
 
   textarea.addEventListener('input', render);
   render();

@@ -28,6 +28,8 @@ const PAGES = [
   ['/twitter-advanced-search-builder/', '#s-from'],
   ['/tweet-screenshot-generator/', '#ss-form'],
   ['/bookmark-manager/', '#bm-form'],
+  ['/tweet-splitter/', '#sp-input'],
+  ['/twitter-font-generator/', '#ff-input'],
   ['/privacy/', 'main'],
   ['/terms/', 'main'],
 ];

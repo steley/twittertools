@@ -12,7 +12,7 @@ export interface Tool {
 export const CATEGORY_LABELS: Record<ToolCategory, { title: string; blurb: string }> = {
   download: { title: 'Download Tools', blurb: 'Save videos, GIFs and photos from public posts.' },
   read: { title: 'Reader & Research', blurb: 'Unroll threads, save posts to a private library, build searches without operators.' },
-  write: { title: 'Writing', blurb: 'Get the character count right before you post.' },
+  write: { title: 'Writing', blurb: 'Draft with the real counting rules — split long text into threads, style it, get the length right.' },
   create: { title: 'Create & Share', blurb: 'Turn public posts into polished images you can share anywhere.' },
   dev: { title: 'Developer', blurb: 'Parse post URLs and Snowflake IDs by hand.' },
 };
@@ -56,6 +56,20 @@ export const TOOLS: Tool[] = [
     tagline: 'Build X search queries with a form — no operators to memorize.',
     category: 'read',
     icon: svg('<circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /><path d="M11 8v6" /><path d="M8 11h6" />'),
+  },
+  {
+    slug: '/tweet-splitter',
+    name: 'Tweet Splitter',
+    tagline: 'Break long text into a numbered thread of 280-character posts, cut at sentences.',
+    category: 'write',
+    icon: svg('<circle cx="6" cy="6" r="2.5" /><circle cx="6" cy="18" r="2.5" /><path d="M8.2 7.8 20 20" /><path d="M8.2 16.2 20 4" />'),
+  },
+  {
+    slug: '/twitter-font-generator',
+    name: 'Font Generator',
+    tagline: 'Bold, italic, script and more Unicode styles for posts and bios.',
+    category: 'write',
+    icon: svg('<path d="M4 7V5h16v2" /><path d="M12 5v14" /><path d="M9 19h6" />'),
   },
   {
     slug: '/tweet-character-counter',
