@@ -6,7 +6,7 @@
 
 import type { TweetData } from './api';
 
-export type BookmarkType = 'video' | 'photo' | 'thread' | 'text';
+export type BookmarkType = 'video' | 'photo' | 'thread' | 'text' | 'article';
 
 /** One media item as stored with the snapshot: photos carry the full image,
  * videos/GIFs carry the poster thumbnail (postUrl links back to the post). */
@@ -28,6 +28,9 @@ export interface BookmarkItem {
   thumb: string; // first media CDN url or '' (pre-media-array data)
   /** All media of the post, inline. Older entries only have `thumb`. */
   media?: BookmarkMedia[];
+  /** Thread bookmarks: every post's text (`text` stays the joined blob for
+   * search and legacy display). Older entries don't have it. */
+  posts?: string[];
   savedAt: number; // epoch ms
   tags: string[];
   note: string;
@@ -35,8 +38,9 @@ export interface BookmarkItem {
 
 export function tweetToBookmark(t: TweetData): BookmarkItem {
   const types = t.media.map((m) => m.type);
-  const mediaType: BookmarkType =
-    types.includes('video') || types.includes('animated_gif')
+  const mediaType: BookmarkType = t.article
+    ? 'article'
+    : types.includes('video') || types.includes('animated_gif')
       ? 'video'
       : types.includes('photo')
         ? 'photo'
@@ -140,9 +144,9 @@ export function normalizeItem(raw: unknown): BookmarkItem {
   const str = (v: unknown) => (typeof v === 'string' ? v : '');
   const id = str(r.id).replace(/\D/g, '') || String(Date.now());
   const thumb = str(r.thumb);
-  const mediaType: BookmarkType = (['video', 'photo', 'thread', 'text'] as BookmarkType[]).includes(
-    r.mediaType as BookmarkType
-  )
+  const mediaType: BookmarkType = (
+    ['video', 'photo', 'thread', 'text', 'article'] as BookmarkType[]
+  ).includes(r.mediaType as BookmarkType)
     ? (r.mediaType as BookmarkType)
     : 'text';
   const media = Array.isArray(r.media)
@@ -172,6 +176,9 @@ export function normalizeItem(raw: unknown): BookmarkItem {
     mediaType,
     thumb,
     media,
+    posts: Array.isArray(r.posts)
+      ? (r.posts as unknown[]).filter((p): p is string => typeof p === 'string')
+      : undefined,
     savedAt: typeof r.savedAt === 'number' && r.savedAt > 0 ? r.savedAt : Date.now(),
     tags: Array.isArray(r.tags)
       ? r.tags.filter((t): t is string => typeof t === 'string' && t.trim() !== '').map((t) => t.trim())

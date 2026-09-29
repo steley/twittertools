@@ -178,6 +178,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     photo: 'Photo',
     thread: 'Thread',
     text: 'Text',
+    article: 'Article',
   };
 
   let all: BookmarkItem[] = [];
@@ -214,7 +215,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
 
   // --- rendering ----------------------------------------------------------
   function renderFilters() {
-    const types: (BookmarkType | 'all')[] = ['all', 'video', 'photo', 'thread', 'text'];
+    const types: (BookmarkType | 'all')[] = ['all', 'video', 'photo', 'article', 'thread', 'text'];
     typesBox.replaceChildren();
     for (const t of types) {
       const count = t === 'all' ? all.length : all.filter((b) => b.mediaType === t).length;
@@ -277,9 +278,44 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     meta.appendChild(d);
     main.appendChild(meta);
 
-    const text = el('p', 'mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-slate-700');
-    text.textContent = excerpt(item.text);
-    main.appendChild(text);
+    // body: threads with a posts array show the first post and expand to all
+    // of them; everything else shows the text (long text gets a toggle too)
+    const bodyWrap = el('div', 'mt-1.5 text-sm leading-relaxed text-slate-700');
+    const posts = item.posts?.length ? item.posts : null;
+    let expanded = false;
+    const paintBody = () => {
+      bodyWrap.replaceChildren();
+      if (posts && posts.length > 1) {
+        const shown = expanded ? posts : [posts[0]];
+        shown.forEach((p, i) => {
+          const pe = el('p', 'whitespace-pre-wrap' + (i > 0 ? ' mt-2' : ''));
+          pe.textContent = p;
+          bodyWrap.appendChild(pe);
+        });
+      } else {
+        const full = posts ? posts[0] ?? '' : item.text;
+        const pe = el('p', 'whitespace-pre-wrap');
+        pe.textContent = expanded || full.length <= 280 ? full : excerpt(full);
+        bodyWrap.appendChild(pe);
+      }
+      const needsToggle = (posts !== null && posts.length > 1) || (posts === null && item.text.length > 280);
+      if (needsToggle) {
+        const btn = el('button', 'mt-1.5 block text-xs font-medium text-brand hover:underline') as HTMLButtonElement;
+        btn.type = 'button';
+        btn.textContent = expanded
+          ? 'Show less'
+          : posts && posts.length > 1
+            ? `Show all ${posts.length} posts`
+            : 'Show full post';
+        btn.addEventListener('click', () => {
+          expanded = !expanded;
+          paintBody();
+        });
+        bodyWrap.appendChild(btn);
+      }
+    };
+    paintBody();
+    main.appendChild(bodyWrap);
 
     // inline media, the same structure for every bookmark type: photos show
     // full-size, videos/GIFs show their poster linked to the post
@@ -476,7 +512,10 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
         .join('\n\n');
       const tags = b.tags.length ? `\n\nTags: ${b.tags.map((t) => '#' + t).join(', ')}` : '';
       const note = b.note ? `\n\n> ${b.note.replace(/\n/g, '\n> ')}` : '';
-      return `${head}\n\n${b.text}${media ? '\n\n' + media : ''}\n\n${safeUrl(b)}${tags}${note}`;
+      // threads export every post; photos embed inline; videos carry their
+      // thumbnail linked to the post
+      const body = b.posts && b.posts.length > 1 ? b.posts.join('\n\n') : b.text;
+      return `${head}\n\n${body}${media ? '\n\n' + media : ''}\n\n${safeUrl(b)}${tags}${note}`;
     });
     const md =
       `# My X Bookmarks\n\n> Exported from twittertools.com — ${new Date().toISOString().slice(0, 10)}\n\n` +
