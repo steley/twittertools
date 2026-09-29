@@ -149,13 +149,11 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
 <script>
   import { extractTweetId, fetchTweet, wireMediaImg, type TweetData } from '../lib/api';
   import {
-    bookmarkToggleButton,
     clearBookmarks,
     deleteBookmark,
     getBookmark,
     importBookmarks,
     listBookmarks,
-    normalizeItem,
     putBookmark,
     tweetToBookmark,
     type BookmarkItem,
@@ -325,7 +323,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
         const chip = el(
           'button',
           'rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500 hover:bg-red-50 hover:text-red-500'
-        );
+        ) as HTMLButtonElement;
         chip.type = 'button';
         chip.title = 'Remove tag';
         const label = el('span', '');
