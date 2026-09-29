@@ -8,6 +8,16 @@ import type { TweetData } from './api';
 
 export type BookmarkType = 'video' | 'photo' | 'thread' | 'text';
 
+/** One media item as stored with the snapshot: photos carry the full image,
+ * videos/GIFs carry the poster thumbnail (postUrl links back to the post). */
+export interface BookmarkMedia {
+  type: 'photo' | 'video' | 'animated_gif';
+  url: string;
+  width?: number | null;
+  height?: number | null;
+  postUrl?: string;
+}
+
 export interface BookmarkItem {
   id: string; // tweet id (first tweet's id for threads)
   url: string;
@@ -15,7 +25,9 @@ export interface BookmarkItem {
   handle: string;
   text: string; // full snapshot (whole thread for type 'thread')
   mediaType: BookmarkType;
-  thumb: string; // first media CDN url or ''
+  thumb: string; // first media CDN url or '' (pre-media-array data)
+  /** All media of the post, inline. Older entries only have `thumb`. */
+  media?: BookmarkMedia[];
   savedAt: number; // epoch ms
   tags: string[];
   note: string;
@@ -29,6 +41,13 @@ export function tweetToBookmark(t: TweetData): BookmarkItem {
       : types.includes('photo')
         ? 'photo'
         : 'text';
+  const media: BookmarkMedia[] = t.media.map((m) => ({
+    type: m.type,
+    url: m.url,
+    width: m.width,
+    height: m.height,
+    postUrl: t.url,
+  }));
   return {
     id: t.id,
     url: t.url,
@@ -37,6 +56,7 @@ export function tweetToBookmark(t: TweetData): BookmarkItem {
     text: t.text,
     mediaType,
     thumb: t.media[0]?.url ?? '',
+    media,
     savedAt: Date.now(),
     tags: [],
     note: '',
@@ -119,16 +139,39 @@ export function normalizeItem(raw: unknown): BookmarkItem {
   const r = (raw ?? {}) as Record<string, unknown>;
   const str = (v: unknown) => (typeof v === 'string' ? v : '');
   const id = str(r.id).replace(/\D/g, '') || String(Date.now());
+  const thumb = str(r.thumb);
+  const mediaType: BookmarkType = (['video', 'photo', 'thread', 'text'] as BookmarkType[]).includes(
+    r.mediaType as BookmarkType
+  )
+    ? (r.mediaType as BookmarkType)
+    : 'text';
+  const media = Array.isArray(r.media)
+    ? (r.media as Record<string, unknown>[])
+        .map((m) => ({
+          type: (['photo', 'video', 'animated_gif'] as BookmarkMedia['type'][]).includes(
+            m?.type as BookmarkMedia['type']
+          )
+            ? (m.type as BookmarkMedia['type'])
+            : 'photo',
+          url: str(m?.url),
+          width: typeof m?.width === 'number' ? m.width : null,
+          height: typeof m?.height === 'number' ? m.height : null,
+          postUrl: str(m?.postUrl) || undefined,
+        }))
+        .filter((m) => m.url.startsWith('https://'))
+    : // legacy entries (and old exports) only carry the thumbnail
+      thumb.startsWith('https://')
+      ? [{ type: 'photo' as const, url: thumb, width: null, height: null }]
+      : [];
   return {
     id,
     url: str(r.url) || `https://x.com/i/status/${id}`,
     author: str(r.author),
     handle: str(r.handle).replace(/^@/, ''),
     text: str(r.text),
-    mediaType: (['video', 'photo', 'thread', 'text'] as BookmarkType[]).includes(r.mediaType as BookmarkType)
-      ? (r.mediaType as BookmarkType)
-      : 'text',
-    thumb: str(r.thumb),
+    mediaType,
+    thumb,
+    media,
     savedAt: typeof r.savedAt === 'number' && r.savedAt > 0 ? r.savedAt : Date.now(),
     tags: Array.isArray(r.tags)
       ? r.tags.filter((t): t is string => typeof t === 'string' && t.trim() !== '').map((t) => t.trim())

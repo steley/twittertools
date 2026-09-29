@@ -203,6 +203,22 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-video-downloader').slic
         });
       });
       row.appendChild(dl);
+      // direct CDN link for players, wget/yt-dlp, etc.
+      const copy = el(
+        'button',
+        'rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand'
+      );
+      copy.textContent = 'Copy URL';
+      copy.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(v.url);
+          copy.textContent = '✓ Copied';
+        } catch {
+          copy.textContent = 'Copy failed';
+        }
+        setTimeout(() => (copy.textContent = 'Copy URL'), 2000);
+      });
+      row.appendChild(copy);
       rows.appendChild(row);
     }
     card.appendChild(rows);

@@ -16,7 +16,7 @@ const faq = [
   },
   {
     q: 'What gets saved with a bookmark?',
-    a: 'A snapshot: the full text, author, a thumbnail and the original link. If the post is later deleted, your snapshot keeps it readable — that is the point of a bookmark manager.',
+    a: "A snapshot: the full text, author, the post's images (for videos, their thumbnail linked to the post) and the original link. If the post is later deleted, your snapshot keeps it readable — that is the point of a bookmark manager.",
   },
   {
     q: 'How do I add posts from the other tools?',
@@ -107,8 +107,8 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
       <div class="rounded-2xl border border-slate-200 bg-white p-5">
         <p class="font-semibold">Snapshots, not just links</p>
         <p class="mt-1 text-sm text-slate-600">
-          The full text and a thumbnail are stored with every bookmark, so deleted posts stay
-          readable in your library.
+          The full text, images and video thumbnails are stored with every bookmark, so deleted
+          posts stay readable in your library.
         </p>
       </div>
       <div class="rounded-2xl border border-slate-200 bg-white p-5">
@@ -159,6 +159,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     putBookmark,
     tweetToBookmark,
     type BookmarkItem,
+    type BookmarkMedia,
     type BookmarkType,
   } from '../lib/bookmark-store';
 
@@ -194,6 +195,13 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
   const safeUrl = (item: BookmarkItem) =>
     /^https:\/\/(x|twitter)\.com\//.test(item.url) ? item.url : `https://x.com/i/status/${item.id}`;
   const excerpt = (text: string) => (text.length > 280 ? text.slice(0, 280) + '…' : text);
+  // entries saved before inline media existed only carry `thumb`
+  const mediaOf = (item: BookmarkItem): BookmarkMedia[] =>
+    item.media?.length
+      ? item.media
+      : item.thumb.startsWith('https://')
+        ? [{ type: 'photo', url: item.thumb, width: null, height: null, postUrl: item.url }]
+        : [];
 
   // --- filtering ----------------------------------------------------------
   function visible(): BookmarkItem[] {
@@ -252,29 +260,63 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
   }
 
   function renderItem(item: BookmarkItem): HTMLElement {
-    const card = el('article', 'flex gap-4 rounded-2xl border border-slate-200 bg-white p-4');
+    const card = el('article', 'rounded-2xl border border-slate-200 bg-white p-4');
 
-    if (item.thumb.startsWith('https://')) {
-      const img = document.createElement('img');
-      img.alt = '';
-      img.loading = 'lazy';
-      img.className = 'h-20 w-20 shrink-0 rounded-xl bg-slate-100 object-cover';
-      wireMediaImg(img, item.thumb, 'bookmark-thumb');
-      card.appendChild(img);
-    }
-
-    const main = el('div', 'min-w-0 flex-1');
+    const main = el('div', 'min-w-0');
     const meta = el('div', 'flex flex-wrap items-center gap-2 text-xs text-slate-500');
     const typeBadge = el('span', 'rounded-full bg-sky-50 px-2 py-0.5 font-semibold text-brand');
     typeBadge.textContent = TYPE_LABELS[item.mediaType];
     meta.appendChild(typeBadge);
-    if (item.handle) meta.append(document.createTextNode('@' + item.handle));
-    meta.append(document.createTextNode(new Date(item.savedAt).toISOString().slice(0, 10)));
+    // spans, not bare text nodes: adjacent text nodes merge into one flex
+    // item and the gap spacing between them collapses
+    if (item.handle) {
+      const h = el('span', '');
+      h.textContent = '@' + item.handle;
+      meta.appendChild(h);
+    }
+    const d = el('span', '');
+    d.textContent = new Date(item.savedAt).toISOString().slice(0, 10);
+    meta.appendChild(d);
     main.appendChild(meta);
 
     const text = el('p', 'mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-slate-700');
     text.textContent = excerpt(item.text);
     main.appendChild(text);
+
+    // inline media, the same structure for every bookmark type: photos show
+    // full-size, videos/GIFs show their poster linked to the post
+    const mediaList = mediaOf(item);
+    if (mediaList.length) {
+      const mediaWrap = el('div', 'mt-2.5 space-y-2');
+      for (const m of mediaList) {
+        if (m.type === 'video' || m.type === 'animated_gif') {
+          const link = document.createElement('a');
+          link.href = safeUrl(item);
+          link.target = '_blank';
+          link.rel = 'noopener noreferrer';
+          link.className = 'relative block overflow-hidden rounded-xl bg-slate-100';
+          const img = document.createElement('img');
+          img.alt = 'Video thumbnail';
+          img.loading = 'lazy';
+          img.className = 'max-h-96 w-full object-cover';
+          wireMediaImg(img, m.url, 'bookmark-video-thumb');
+          link.appendChild(img);
+          const play = el('span', 'pointer-events-none absolute inset-0 flex items-center justify-center');
+          play.innerHTML =
+            '<span class="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-lg text-white">▶</span>';
+          link.appendChild(play);
+          mediaWrap.appendChild(link);
+        } else {
+          const img = document.createElement('img');
+          img.alt = 'Post image';
+          img.loading = 'lazy';
+          img.className = 'max-h-96 w-full rounded-xl object-cover bg-slate-100';
+          wireMediaImg(img, m.url, 'bookmark-image');
+          mediaWrap.appendChild(img);
+        }
+      }
+      main.appendChild(mediaWrap);
+    }
 
     if (item.tags.length) {
       const tagRow = el('div', 'mt-2 flex flex-wrap gap-1');
@@ -409,9 +451,17 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
   document.getElementById('bm-export-md')!.addEventListener('click', () => {
     const parts = all.map((b, i) => {
       const head = `### ${i + 1}. ${b.author || '@' + b.handle} · ${TYPE_LABELS[b.mediaType]} · ${new Date(b.savedAt).toISOString().slice(0, 10)}`;
+      // photos embed inline; videos/GIFs carry their thumbnail linked to the post
+      const media = mediaOf(b)
+        .map((m) =>
+          m.type === 'video' || m.type === 'animated_gif'
+            ? `[![video](${m.url})](${safeUrl(b)})`
+            : `![image](${m.url})`
+        )
+        .join('\n\n');
       const tags = b.tags.length ? `\n\nTags: ${b.tags.map((t) => '#' + t).join(', ')}` : '';
       const note = b.note ? `\n\n> ${b.note.replace(/\n/g, '\n> ')}` : '';
-      return `${head}\n\n${b.text}\n\n${safeUrl(b)}${tags}${note}`;
+      return `${head}\n\n${b.text}${media ? '\n\n' + media : ''}\n\n${safeUrl(b)}${tags}${note}`;
     });
     const md =
       `# My X Bookmarks\n\n> Exported from twittertools.com — ${new Date().toISOString().slice(0, 10)}\n\n` +
