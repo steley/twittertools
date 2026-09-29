@@ -927,6 +927,11 @@ async def api_thread(request: web.Request) -> web.Response:
         seen.add(current)
 
         status, data = await fetch_syndication(session, current)
+        if data is not None:
+            try:
+                tweet = normalize_tweet(data)
+            except Exception:  # malformed upstream payload — same as a failed fetch
+                status, data = 599, None
         if data is None:
             if tweets:
                 partial = True
@@ -1101,12 +1106,18 @@ def cors_for(request: web.Request) -> Dict[str, str]:
     return {}
 
 
+STATS_API_PATHS = {"/api/tweet", "/api/thread", "/api/download", "/api/healthz"}
+
+
 @web.middleware
 async def stats_middleware(request: web.Request, handler):
-    """Count API response statuses for /api/healthz (CORS preflight excluded)."""
+    """Count API response statuses for /api/healthz (CORS preflight excluded).
+    Unknown /api/* paths collapse into one bucket — request.path is attacker
+    controlled and would otherwise grow the counters dict without bound."""
     resp = await handler(request)
     if request.path.startswith("/api/") and request.method != "OPTIONS":
-        STATS.note_response(request.path, resp.status)
+        path = request.path if request.path in STATS_API_PATHS else "/api/other"
+        STATS.note_response(path, resp.status)
     return resp
 
 

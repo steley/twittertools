@@ -125,7 +125,7 @@ const jsonLd = {
     s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const toolUrl = (slug: string, postUrl: string) => `${slug}?url=${encodeURIComponent(postUrl)}`;
   const pill = (href: string, label: string, external = false) =>
-    `<a class="rounded-full border border-sky-200 bg-white px-4 py-1.5 text-xs font-medium text-sky-700 transition hover:border-brand hover:text-brand" href="${href}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>${label}</a>`;
+    `<a class="rounded-full border border-sky-200 bg-white px-4 py-1.5 text-xs font-medium text-sky-700 transition hover:border-brand hover:text-brand" href="${esc(href)}"${external ? ' target="_blank" rel="noopener noreferrer"' : ''}>${esc(label)}</a>`;
 
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
