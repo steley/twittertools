@@ -24,7 +24,7 @@ const faq = [
   },
   {
     q: 'Can I export for Notion or Obsidian?',
-    a: 'Yes. The Markdown export writes one section per post with the full text, link, tags and your notes — it pastes cleanly into any notes app. JSON keeps everything, including notes and tags, for re-import.',
+    a: 'Yes. The Markdown export writes one section per post — the full text (every post for threads), the images inline, the link, tags and your notes — and pastes cleanly into Notion, Obsidian or any notes app. JSON keeps everything for re-import.',
   },
 ];
 
@@ -364,19 +364,22 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
         d.textContent = label;
         return d;
       };
-      // display images use resized WebP variants served by the twimg CDN
-      // (small/medium/large via srcset); the stored URL keeps pointing at the
-      // original, and the proxy fallback fetches the medium variant too. If
-      // both CDN and proxy fail, swap in a placeholder instead of a broken
-      // image icon.
-      const setVariants = (img: HTMLImageElement, m: BookmarkMedia, sizes: string, failCls?: string) => {
+      // one builder for every card image: WebP display variants from the
+      // twimg CDN (small/medium/large via srcset — the stored URL keeps
+      // pointing at the original, and the proxy fallback fetches the medium
+      // variant too), natural-aspect reservation, click-to-enlarge, and a
+      // placeholder swap when both CDN and proxy fail.
+      const makeImg = (m: BookmarkMedia, cls: string, failCls?: string): HTMLImageElement => {
+        const img = document.createElement('img');
+        img.alt = m.type === 'video' || m.type === 'animated_gif' ? 'Video thumbnail' : 'Post image';
         img.loading = 'lazy';
         img.decoding = 'async';
-        img.className += ' cursor-zoom-in';
+        img.className = `${cls} cursor-zoom-in`;
+        if (m.width && m.height) img.style.aspectRatio = `${m.width} / ${m.height}`;
         img.srcset = (['small', 'medium', 'large'] as const)
           .map((n) => `${cdnDisplayUrl(m.url, n)} ${n === 'small' ? '680w' : n === 'medium' ? '1200w' : '2048w'}`)
           .join(', ');
-        img.sizes = sizes;
+        img.sizes = '(max-width: 768px) 100vw, 700px';
         img.addEventListener('error', () => {
           if (img.src.includes('/api/download')) img.replaceWith(failPlaceholder('Media unavailable', failCls));
         });
@@ -388,6 +391,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
           openLightbox(img);
         });
         wireMediaImg(img, cdnDisplayUrl(m.url, 'medium'), 'bookmark-image');
+        return img;
       };
       const playBadge = (): HTMLElement => {
         const play = el('span', 'pointer-events-none absolute inset-0 flex items-center justify-center');
@@ -401,11 +405,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
         // media height, width follows the ratio — left-aligned
         const m = mediaList[0];
         const isVideo = m.type === 'video' || m.type === 'animated_gif';
-        const img = document.createElement('img');
-        img.alt = isVideo ? 'Video thumbnail' : 'Post image';
-        img.className = 'block max-h-96 w-auto max-w-full bg-slate-100' + (isVideo ? '' : ' rounded-xl');
-        if (m.width && m.height) img.style.aspectRatio = `${m.width} / ${m.height}`;
-        setVariants(img, m, '(max-width: 768px) 100vw, 700px');
+        const img = makeImg(m, 'block max-h-96 w-auto max-w-full bg-slate-100' + (isVideo ? '' : ' rounded-xl'));
         const wrap = el('div', 'mt-2.5');
         if (isVideo) {
           const link = document.createElement('a');
@@ -446,13 +446,13 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
         const stripFail = 'flex h-96 w-72 shrink-0 items-center justify-center bg-slate-200 text-xs text-slate-400';
         for (const m of mediaList) {
           const isVideo = m.type === 'video' || m.type === 'animated_gif';
-          const img = document.createElement('img');
-          img.alt = isVideo ? 'Video thumbnail' : 'Post image';
-          img.className = isVideo
-            ? 'block h-full w-auto bg-slate-100'
-            : 'block h-96 w-auto shrink-0 rounded-xl bg-slate-100';
-          if (m.width && m.height) img.style.aspectRatio = `${m.width} / ${m.height}`;
-          setVariants(img, m, '(max-width: 768px) 100vw, 700px', stripFail);
+          const img = makeImg(
+            m,
+            isVideo
+              ? 'block h-full w-auto bg-slate-100'
+              : 'block h-96 w-auto shrink-0 rounded-xl bg-slate-100',
+            stripFail,
+          );
           img.addEventListener('load', updateArrows);
           if (isVideo) {
             const link = document.createElement('a');

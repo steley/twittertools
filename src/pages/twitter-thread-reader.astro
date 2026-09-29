@@ -51,7 +51,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
         From post URL
       </button>
       <button id="tr-tab-paste" class="tr-tab rounded-full px-4 py-2 text-sm font-medium" data-active="false" aria-selected="false" role="tab">
-        Paste text
+        Paste mode
       </button>
     </div>
 
@@ -545,7 +545,12 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
           "Couldn't follow the reply chain for this post (X's embed endpoint doesn't expose it). Copy the thread text and use the Paste mode instead — all exports still work.";
         partialBox.classList.remove('hidden');
       } else if (data.partial) {
-        partialBox.textContent = 'Partially unrolled: some posts in the chain were unavailable (deleted or protected).';
+        partialBox.textContent =
+          data.reason === 'conversation_truncated'
+            ? "X cut the conversation listing short — posts near the end may be missing. Pasting the thread's last post usually fetches the rest."
+            : data.reason === 'replies_unavailable'
+              ? "The rest of the thread couldn't be fetched right now, so what you see may be incomplete. Try again shortly, or paste the thread's last post."
+              : 'Partially unrolled: some posts in the chain were unavailable (deleted or protected).';
         partialBox.classList.remove('hidden');
       } else if (data.tweets.length === 1) {
         singleHint.innerHTML = first?.article
