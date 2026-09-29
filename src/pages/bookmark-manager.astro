@@ -326,10 +326,10 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     paintBody();
     main.appendChild(bodyWrap);
 
-    // inline media, the same structure for every bookmark type. 1 item: full
-    // width. 2-4 items: an X-style grid with everything visible at once
-    // (narrow images sit side by side). 5+: a mini-carousel so the card
-    // doesn't stretch forever.
+    // inline media, the same structure for every bookmark type: one item
+    // shows whole at its natural aspect (height-capped, left-aligned, never
+    // stretched or cropped); two or more sit in a mini-carousel switched
+    // with arrow buttons
     const mediaList = mediaOf(item);
     if (mediaList.length) {
       const failPlaceholder = (label: string, cls = 'flex h-40 w-full items-center justify-center rounded-xl bg-slate-100 text-xs text-slate-400'): HTMLElement => {
@@ -360,67 +360,40 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
           '<span class="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-lg text-white">▶</span>';
         return play;
       };
-      // natural-aspect element for the single and carousel layouts
-      const buildMedia = (m: BookmarkMedia): HTMLElement => {
+      // the whole media visible: natural aspect from the stored dimensions
+      // (reserves the box before the bytes arrive), capped at the 384px media
+      // height, width follows the ratio — no stretching, no cropping
+      const fitImg = (m: BookmarkMedia): HTMLImageElement => {
+        const img = document.createElement('img');
+        img.alt = m.type === 'video' || m.type === 'animated_gif' ? 'Video thumbnail' : 'Post image';
+        img.className = 'block max-h-96 w-auto max-w-full bg-slate-100';
+        if (m.width && m.height) img.style.aspectRatio = `${m.width} / ${m.height}`;
+        setVariants(img, m, '(max-width: 768px) 100vw, 700px');
+        return img;
+      };
+      const buildSlide = (m: BookmarkMedia): HTMLElement => {
         if (m.type === 'video' || m.type === 'animated_gif') {
           const link = document.createElement('a');
           link.href = safeUrl(item);
           link.target = '_blank';
           link.rel = 'noopener noreferrer';
-          link.className = 'relative block overflow-hidden rounded-xl bg-slate-100';
-          const img = document.createElement('img');
-          img.alt = 'Video thumbnail';
-          img.className = 'max-h-96 w-full bg-slate-100 object-cover';
-          if (m.width && m.height) img.style.aspectRatio = `${m.width} / ${m.height}`;
-          setVariants(img, m, '(max-width: 768px) 100vw, 700px');
-          link.appendChild(img);
+          link.className = 'relative inline-block overflow-hidden rounded-xl bg-slate-100';
+          link.appendChild(fitImg(m));
           link.appendChild(playBadge());
           return link;
         }
-        const img = document.createElement('img');
-        img.alt = 'Post image';
-        img.className = 'max-h-96 w-full rounded-xl bg-slate-100 object-cover';
-        if (m.width && m.height) img.style.aspectRatio = `${m.width} / ${m.height}`;
-        setVariants(img, m, '(max-width: 768px) 100vw, 700px');
+        const img = fitImg(m);
+        img.className += ' rounded-xl';
         return img;
       };
       if (mediaList.length === 1) {
         const wrap = el('div', 'mt-2.5');
-        wrap.appendChild(buildMedia(mediaList[0]));
+        wrap.appendChild(buildSlide(mediaList[0]));
         main.appendChild(wrap);
-      } else if (mediaList.length <= 4) {
-        // everything visible: 2 side by side, 3 = one tall left + two right, 4 = quartered
-        // fixed media-strip height (same cap as single images) — width fills
-        // the card; aspect-ratio + max-height would re-derive the width and
-        // shrink the grid (CSS constraint-violation behavior)
-        const grid = el(
-          'div',
-          (mediaList.length === 2
-            ? 'grid h-96 grid-cols-2'
-            : 'grid h-96 grid-cols-2 grid-rows-2') + ' gap-0.5 overflow-hidden rounded-xl bg-slate-100'
-        );
-        mediaList.forEach((m, i) => {
-          const isVideo = m.type === 'video' || m.type === 'animated_gif';
-          const cell: HTMLElement = isVideo ? document.createElement('a') : el('div', '');
-          if (isVideo) {
-            (cell as HTMLAnchorElement).href = safeUrl(item);
-            (cell as HTMLAnchorElement).target = '_blank';
-            (cell as HTMLAnchorElement).rel = 'noopener noreferrer';
-          }
-          cell.className = `relative overflow-hidden ${mediaList.length === 3 && i === 0 ? 'row-span-2' : ''}`;
-          const img = document.createElement('img');
-          img.alt = isVideo ? 'Video thumbnail' : 'Post image';
-          img.className = 'absolute inset-0 h-full w-full bg-slate-100 object-cover';
-          setVariants(img, m, '(max-width: 768px) 50vw, 350px', 'absolute inset-0 flex items-center justify-center bg-slate-100 text-xs text-slate-400');
-          cell.appendChild(img);
-          if (isVideo) cell.appendChild(playBadge());
-          grid.appendChild(cell);
-        });
-        main.appendChild(grid);
       } else {
         let idx = 0;
-        const wrap = el('div', 'relative mt-2.5 overflow-hidden rounded-xl bg-slate-100');
-        const stage = el('div', '');
+        const wrap = el('div', 'relative mt-2.5 h-96 overflow-hidden rounded-xl bg-slate-100');
+        const stage = el('div', 'flex h-full items-start');
         const counter = el('span', 'absolute right-2 top-2 z-10 rounded-full bg-black/50 px-2 py-0.5 text-xs font-medium text-white');
         const arrow = (dir: -1 | 1, label: string, glyph: string) => {
           const b = el(
@@ -438,7 +411,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
         };
         const paint = () => {
           stage.replaceChildren();
-          stage.appendChild(buildMedia(mediaList[idx]));
+          stage.appendChild(buildSlide(mediaList[idx]));
           counter.textContent = `${idx + 1}/${mediaList.length}`;
         };
         wrap.appendChild(stage);
