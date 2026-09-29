@@ -327,10 +327,11 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     main.appendChild(bodyWrap);
 
     // inline media, the same structure for every bookmark type: photos show
-    // full-size, videos/GIFs show their poster linked to the post
+    // full-size, videos/GIFs show their poster linked to the post. Multiple
+    // media items sit in a mini-carousel (one at a time, arrow buttons)
+    // instead of stacking and stretching the page.
     const mediaList = mediaOf(item);
     if (mediaList.length) {
-      const mediaWrap = el('div', 'mt-2.5 space-y-2');
       const failPlaceholder = (label: string): HTMLElement => {
         const d = el('div', 'flex h-40 w-full items-center justify-center rounded-xl bg-slate-100 text-xs text-slate-400');
         d.textContent = label;
@@ -355,7 +356,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
         });
         wireMediaImg(img, cdnDisplayUrl(m.url, 'medium'), 'bookmark-image');
       };
-      for (const m of mediaList) {
+      const buildMedia = (m: BookmarkMedia): HTMLElement => {
         if (m.type === 'video' || m.type === 'animated_gif') {
           const link = document.createElement('a');
           link.href = safeUrl(item);
@@ -370,15 +371,48 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
           play.innerHTML =
             '<span class="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-lg text-white">▶</span>';
           link.appendChild(play);
-          mediaWrap.appendChild(link);
-        } else {
-          const img = document.createElement('img');
-          img.alt = 'Post image';
-          wireDisplayImg(img, m, 'rounded-xl');
-          mediaWrap.appendChild(img);
+          return link;
         }
+        const img = document.createElement('img');
+        img.alt = 'Post image';
+        wireDisplayImg(img, m, 'rounded-xl');
+        return img;
+      };
+      if (mediaList.length === 1) {
+        const wrap = el('div', 'mt-2.5');
+        wrap.appendChild(buildMedia(mediaList[0]));
+        main.appendChild(wrap);
+      } else {
+        let idx = 0;
+        const wrap = el('div', 'relative mt-2.5 overflow-hidden rounded-xl bg-slate-100');
+        const stage = el('div', '');
+        const counter = el('span', 'absolute right-2 top-2 z-10 rounded-full bg-black/50 px-2 py-0.5 text-xs font-medium text-white');
+        const arrow = (dir: -1 | 1, label: string, glyph: string) => {
+          const b = el(
+            'button',
+            `absolute top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-base leading-none text-white hover:bg-black/70 ${dir === -1 ? 'left-2' : 'right-2'}`
+          ) as HTMLButtonElement;
+          b.type = 'button';
+          b.setAttribute('aria-label', label);
+          b.textContent = glyph;
+          b.addEventListener('click', () => {
+            idx = (idx + dir + mediaList.length) % mediaList.length;
+            paint();
+          });
+          return b;
+        };
+        const paint = () => {
+          stage.replaceChildren();
+          stage.appendChild(buildMedia(mediaList[idx]));
+          counter.textContent = `${idx + 1}/${mediaList.length}`;
+        };
+        wrap.appendChild(stage);
+        wrap.appendChild(arrow(-1, 'Previous image', '‹'));
+        wrap.appendChild(arrow(1, 'Next image', '›'));
+        wrap.appendChild(counter);
+        paint();
+        main.appendChild(wrap);
       }
-      main.appendChild(mediaWrap);
     }
 
     if (item.tags.length) {
