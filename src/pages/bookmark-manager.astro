@@ -326,14 +326,14 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     paintBody();
     main.appendChild(bodyWrap);
 
-    // inline media, the same structure for every bookmark type: photos show
-    // full-size, videos/GIFs show their poster linked to the post. Multiple
-    // media items sit in a mini-carousel (one at a time, arrow buttons)
-    // instead of stacking and stretching the page.
+    // inline media, the same structure for every bookmark type. 1 item: full
+    // width. 2-4 items: an X-style grid with everything visible at once
+    // (narrow images sit side by side). 5+: a mini-carousel so the card
+    // doesn't stretch forever.
     const mediaList = mediaOf(item);
     if (mediaList.length) {
-      const failPlaceholder = (label: string): HTMLElement => {
-        const d = el('div', 'flex h-40 w-full items-center justify-center rounded-xl bg-slate-100 text-xs text-slate-400');
+      const failPlaceholder = (label: string, cls = 'flex h-40 w-full items-center justify-center rounded-xl bg-slate-100 text-xs text-slate-400'): HTMLElement => {
+        const d = el('div', cls);
         d.textContent = label;
         return d;
       };
@@ -342,20 +342,25 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
       // original, and the proxy fallback fetches the medium variant too. If
       // both CDN and proxy fail, swap in a placeholder instead of a broken
       // image icon.
-      const wireDisplayImg = (img: HTMLImageElement, m: BookmarkMedia, extraCls: string) => {
+      const setVariants = (img: HTMLImageElement, m: BookmarkMedia, sizes: string, failCls?: string) => {
         img.loading = 'lazy';
         img.decoding = 'async';
-        img.className = `max-h-96 w-full bg-slate-100 object-cover ${extraCls}`;
-        if (m.width && m.height) img.style.aspectRatio = `${m.width} / ${m.height}`;
         img.srcset = (['small', 'medium', 'large'] as const)
           .map((n) => `${cdnDisplayUrl(m.url, n)} ${n === 'small' ? '680w' : n === 'medium' ? '1200w' : '2048w'}`)
           .join(', ');
-        img.sizes = '(max-width: 768px) 100vw, 700px';
+        img.sizes = sizes;
         img.addEventListener('error', () => {
-          if (img.src.includes('/api/download')) img.replaceWith(failPlaceholder('Media unavailable'));
+          if (img.src.includes('/api/download')) img.replaceWith(failPlaceholder('Media unavailable', failCls));
         });
         wireMediaImg(img, cdnDisplayUrl(m.url, 'medium'), 'bookmark-image');
       };
+      const playBadge = (): HTMLElement => {
+        const play = el('span', 'pointer-events-none absolute inset-0 flex items-center justify-center');
+        play.innerHTML =
+          '<span class="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-lg text-white">▶</span>';
+        return play;
+      };
+      // natural-aspect element for the single and carousel layouts
       const buildMedia = (m: BookmarkMedia): HTMLElement => {
         if (m.type === 'video' || m.type === 'animated_gif') {
           const link = document.createElement('a');
@@ -365,23 +370,53 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
           link.className = 'relative block overflow-hidden rounded-xl bg-slate-100';
           const img = document.createElement('img');
           img.alt = 'Video thumbnail';
-          wireDisplayImg(img, m, '');
+          img.className = 'max-h-96 w-full bg-slate-100 object-cover';
+          if (m.width && m.height) img.style.aspectRatio = `${m.width} / ${m.height}`;
+          setVariants(img, m, '(max-width: 768px) 100vw, 700px');
           link.appendChild(img);
-          const play = el('span', 'pointer-events-none absolute inset-0 flex items-center justify-center');
-          play.innerHTML =
-            '<span class="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-lg text-white">▶</span>';
-          link.appendChild(play);
+          link.appendChild(playBadge());
           return link;
         }
         const img = document.createElement('img');
         img.alt = 'Post image';
-        wireDisplayImg(img, m, 'rounded-xl');
+        img.className = 'max-h-96 w-full rounded-xl bg-slate-100 object-cover';
+        if (m.width && m.height) img.style.aspectRatio = `${m.width} / ${m.height}`;
+        setVariants(img, m, '(max-width: 768px) 100vw, 700px');
         return img;
       };
       if (mediaList.length === 1) {
         const wrap = el('div', 'mt-2.5');
         wrap.appendChild(buildMedia(mediaList[0]));
         main.appendChild(wrap);
+      } else if (mediaList.length <= 4) {
+        // everything visible: 2 side by side, 3 = one tall left + two right, 4 = quartered
+        // fixed media-strip height (same cap as single images) — width fills
+        // the card; aspect-ratio + max-height would re-derive the width and
+        // shrink the grid (CSS constraint-violation behavior)
+        const grid = el(
+          'div',
+          (mediaList.length === 2
+            ? 'grid h-96 grid-cols-2'
+            : 'grid h-96 grid-cols-2 grid-rows-2') + ' gap-0.5 overflow-hidden rounded-xl bg-slate-100'
+        );
+        mediaList.forEach((m, i) => {
+          const isVideo = m.type === 'video' || m.type === 'animated_gif';
+          const cell: HTMLElement = isVideo ? document.createElement('a') : el('div', '');
+          if (isVideo) {
+            (cell as HTMLAnchorElement).href = safeUrl(item);
+            (cell as HTMLAnchorElement).target = '_blank';
+            (cell as HTMLAnchorElement).rel = 'noopener noreferrer';
+          }
+          cell.className = `relative overflow-hidden ${mediaList.length === 3 && i === 0 ? 'row-span-2' : ''}`;
+          const img = document.createElement('img');
+          img.alt = isVideo ? 'Video thumbnail' : 'Post image';
+          img.className = 'absolute inset-0 h-full w-full bg-slate-100 object-cover';
+          setVariants(img, m, '(max-width: 768px) 50vw, 350px', 'absolute inset-0 flex items-center justify-center bg-slate-100 text-xs text-slate-400');
+          cell.appendChild(img);
+          if (isVideo) cell.appendChild(playBadge());
+          grid.appendChild(cell);
+        });
+        main.appendChild(grid);
       } else {
         let idx = 0;
         const wrap = el('div', 'relative mt-2.5 overflow-hidden rounded-xl bg-slate-100');
