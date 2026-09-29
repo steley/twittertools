@@ -101,6 +101,14 @@ function fmtDate(iso: string | null): string {
   return `${day} · ${time} UTC`;
 }
 
+/** Compact header date for replies: "Sep 29". */
+function fmtShortDate(iso: string | null): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(+d)) return '';
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
 function heart(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, color: string) {
   ctx.save();
   ctx.translate(x, y);
@@ -439,23 +447,52 @@ interface PostBlock {
   lines: string[];
   media: { rects: MediaRect[]; height: number };
   hasMedia: boolean;
+  /** set when the reply opens with the parent author's @mention: the mention
+   * is stripped from the text and shown as a muted "Replying to" line */
+  replyingTo: string | null;
+  dateShort: string;
 }
 
-async function measurePost(ctx: CanvasRenderingContext2D, post: TweetData): Promise<PostBlock> {
+async function measurePost(ctx: CanvasRenderingContext2D, post: TweetData, parent?: TweetData): Promise<PostBlock> {
   const avatarUrl = post.user?.avatar ?? '';
   const avatar = avatarUrl
     ? (await loadImage(avatarUrl.replace(/_normal(\.\w+)$/, '_400x400$1'))) ?? (await loadImage(avatarUrl))
     : null;
   const mediaItems = post.media.slice(0, 4);
   const mediaImgs = await Promise.all(mediaItems.map((m) => loadImage(m.url)));
-  const bodyText = stripTrailingMediaLink(post.text, mediaItems.length > 0);
+  // X-style reply treatment: a reply aimed at the parent author drops the
+  // leading @mention from the text and surfaces it as a muted label instead
+  let replyingTo: string | null = null;
+  let body = post.text ?? '';
+  const parentHandle = parent?.user?.screenName;
+  const selfReply =
+    !parentHandle ||
+    !post.user?.screenName ||
+    post.user.screenName.toLowerCase() === parentHandle.toLowerCase();
+  if (!selfReply) {
+    const m = body.match(/^@([A-Za-z0-9_]+)\s+/);
+    if (m && m[1].toLowerCase() === parentHandle!.toLowerCase()) {
+      replyingTo = '@' + parentHandle;
+      body = body.slice(m[0].length);
+    }
+  }
+  const bodyText = stripTrailingMediaLink(body, mediaItems.length > 0);
   ctx.font = `${TEXT_SIZE}px ${FAMILY}`;
   const lines = bodyText ? wrapText(ctx, bodyText, W - PAD * 2) : [];
   const aspects = mediaItems.map((m, i) => {
     const im = mediaImgs[i];
     return im && im.naturalWidth ? im.naturalWidth / im.naturalHeight : 16 / 9;
   });
-  return { post, avatar, mediaImgs, lines, media: tileImages(mediaItems.length, W, aspects), hasMedia: mediaItems.length > 0 };
+  return {
+    post,
+    avatar,
+    mediaImgs,
+    lines,
+    media: tileImages(mediaItems.length, W, aspects),
+    hasMedia: mediaItems.length > 0,
+    replyingTo,
+    dateShort: fmtShortDate(post.createdAt),
+  };
 }
 
 /** Header + text + media of one post from block-top y, returning the block's
@@ -487,9 +524,13 @@ function drawPostBody(ctx: CanvasRenderingContext2D, b: PostBlock, y: number, p:
   ctx.fillText(b.post.user?.name || 'Unknown', nameX, y + 18);
   ctx.fillStyle = p.muted;
   ctx.font = `400 14px ${FAMILY}`;
-  ctx.fillText('@' + (b.post.user?.screenName || 'unknown'), nameX, y + 37);
+  ctx.fillText('@' + (b.post.user?.screenName || 'unknown') + (b.dateShort ? ' · ' + b.dateShort : ''), nameX, y + 37);
+  if (b.replyingTo) {
+    ctx.font = `400 13px ${FAMILY}`;
+    ctx.fillText('Replying to ' + b.replyingTo, nameX, y + 55);
+  }
 
-  let cy = y + headH + 14; // content top
+  let cy = y + headH + 14 + (b.replyingTo ? 16 : 0); // content top
   if (b.lines.length) {
     ctx.fillStyle = p.text;
     ctx.font = `${TEXT_SIZE}px ${FAMILY}`;
@@ -521,7 +562,7 @@ function drawPostBody(ctx: CanvasRenderingContext2D, b: PostBlock, y: number, p:
 
 function blockHeight(b: PostBlock, avatarSize: number): number {
   const headH = Math.max(avatarSize, 24);
-  let h = headH + 14;
+  let h = headH + 14 + (b.replyingTo ? 16 : 0);
   if (b.lines.length) h += b.lines.length * LINE_H;
   if (b.hasMedia) h += 18 + b.media.height;
   return h;
@@ -540,13 +581,15 @@ export async function renderThreadCard(
   if (!ctx) throw new Error('Canvas not supported in this browser.');
 
   const mainBlock = await measurePost(ctx, main);
-  const replyBlocks = await Promise.all(replies.map((r) => measurePost(ctx, r)));
+  const replyBlocks = await Promise.all(replies.map((r) => measurePost(ctx, r, mainBlock.post)));
 
   // layout: main block + permalink + divider, then per reply (gap + block +
   // divider), then the footer
   const mainBottom = PAD + blockHeight(mainBlock, AVATAR);
+  // replies share the main post's avatar size — X renders them identically
+  const REPLY_AVATAR = AVATAR;
   let h = mainBottom + 20 + 13; // permalink line + divider
-  for (const b of replyBlocks) h += 18 + blockHeight(b, 32) + 18;
+  for (const b of replyBlocks) h += 18 + blockHeight(b, REPLY_AVATAR) + 18;
   const footY = h;
   const baseY = footY + 24;
   const H = Math.round(baseY + PAD);
@@ -568,10 +611,11 @@ export async function renderThreadCard(
 
   const mainDrawn = drawPostBody(ctx, mainBlock, PAD, p, AVATAR);
 
-  // main post permalink, then divider
+  // main post permalink, then divider (protocol stripped for a cleaner look)
   ctx.fillStyle = p.muted;
   ctx.font = `400 13px ${FAMILY}`;
-  ctx.fillText(mainBlock.post.url || `https://x.com/i/status/${mainBlock.post.id}`, PAD, mainDrawn + 20);
+  const permalink = (mainBlock.post.url || `https://x.com/i/status/${mainBlock.post.id}`).replace(/^https:\/\//, '');
+  ctx.fillText(permalink, PAD, mainDrawn + 20);
   let divider = mainDrawn + 33;
 
   for (const b of replyBlocks) {
@@ -580,7 +624,7 @@ export async function renderThreadCard(
     ctx.moveTo(PAD, divider + 0.5);
     ctx.lineTo(W - PAD, divider + 0.5);
     ctx.stroke();
-    const bottom = drawPostBody(ctx, b, divider + 18, p, 32);
+    const bottom = drawPostBody(ctx, b, divider + 18, p, REPLY_AVATAR);
     divider = bottom + 18;
   }
 

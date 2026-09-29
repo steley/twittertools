@@ -25,6 +25,11 @@ async def mock_syndication(request):
         "444444444444444444": tweet_obj("444444444444444444", "Mixed mode: a video and a photo in one post.", "mockuser", media=VIDEO_MEDIA + PHOTO_MEDIA),
         # restricted (sensitive / age-restricted): X answers 200 + empty object
         "1212121212121212121": {},
+        # reply from a DIFFERENT author that opens with @mockuser — exercises
+        # the screenshot thread card's "Replying to" treatment
+        "1313131313131313131": tweet_obj(
+            "1313131313131313131", "@mockuser Couldn't agree more — she earned it.", "otheruser"
+        ),
     }
     data = fixtures.get(request.query.get("id", ""))
     if data is None:
