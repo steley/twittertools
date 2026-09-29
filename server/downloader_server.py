@@ -39,6 +39,7 @@ import json
 import math
 import os
 import re
+import sys
 import time
 from contextlib import suppress
 from collections import OrderedDict, defaultdict, deque
@@ -230,6 +231,7 @@ class TtlCache:
         self.maxsize = maxsize
         self._persist_path = persist_path
         self._dirty = False
+        self._warned = False
         self._save_task: Optional["asyncio.Task"] = None
         self._data: "OrderedDict[str, Tuple[float, Any]]" = OrderedDict()
         # wall-clock stamps on purpose: monotonic readings cannot survive a
@@ -262,7 +264,9 @@ class TtlCache:
 
     def flush(self) -> None:
         """Write pending entries to disk (best effort, atomic via tmp+rename).
-        Unwritable location = silently memory-only."""
+        A failing location prints one warning, then degrades to memory-only —
+        silent degradation would hide misconfigurations (e.g. a hardened
+        systemd unit without ReadWritePaths)."""
         if self._persist_path is None or not self._dirty:
             return
         tmp = self._persist_path.with_suffix(".json.tmp")
@@ -271,8 +275,14 @@ class TtlCache:
             tmp.write_text(json.dumps({"version": 1, "entries": entries}))
             tmp.replace(self._persist_path)
             self._dirty = False
-        except (OSError, TypeError, ValueError):
-            pass
+        except (OSError, TypeError, ValueError) as exc:
+            if not self._warned:
+                print(
+                    f"tweet cache: cannot write {self._persist_path} — staying memory-only "
+                    f"({exc.__class__.__name__}: {exc})",
+                    file=sys.stderr,
+                )
+                self._warned = True
 
     def _schedule_save(self) -> None:
         if self._save_task is not None and not self._save_task.done():

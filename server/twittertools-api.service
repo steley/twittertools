@@ -20,7 +20,9 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=
+# strict makes the whole filesystem read-only; allow writing the tweet cache
+# next to the script (tweet_cache.json, see TT_CACHE_FILE)
+ReadWritePaths=/var/www/twittertools/server
 
 [Install]
 WantedBy=multi-user.target

@@ -142,7 +142,11 @@ curl http://127.0.0.1:8787/api/healthz     # -> aggregate stats (uptime, statuse
 
 The tweet cache persists to `server/tweet_cache.json` (created on first write;
 `TT_CACHE_FILE` moves or disables it). SIGTERM (a systemd restart) flushes it —
-the on-disk entries survive deploys and warm the next boot.
+the on-disk entries survive deploys and warm the next boot. The unit's
+`ReadWritePaths=/var/www/twittertools/server` line is what makes that writable
+under `ProtectSystem=strict` — if it's missing, the backend logs a one-time
+"staying memory-only" warning to the journal and keeps working without
+persistence.
 
 ### 3A. Apache (current VPS — static + /api/ reverse proxy)
 
