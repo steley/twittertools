@@ -851,7 +851,10 @@ async def api_download(request: web.Request) -> web.StreamResponse:
                 headers={
                     "Content-Type": content_type,
                     "Content-Disposition": f'attachment; filename="{filename}"',
-                    "Cache-Control": "no-store",
+                    # twimg media URLs are immutable, so proxied media may sit
+                    # in the browser cache for a week — repeat views (e.g. the
+                    # bookmark library re-rendering) stop hitting the origin.
+                    "Cache-Control": "public, max-age=604800",
                     # Set here, not in the CORS middleware: streaming responses
                     # flush their headers at prepare(), before the middleware
                     # can touch them.

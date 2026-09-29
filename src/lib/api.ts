@@ -89,6 +89,24 @@ export function proxiedDownloadUrl(mediaUrl: string, filename: string): string {
   return `${API_BASE}/api/download?${params.toString()}`;
 }
 
+/** A resized variant of a twimg media URL for on-page display: the CDN serves
+ * WebP thumbnails via ?format=webp&name=… (small≈680w, medium≈1200w, large≈
+ * 2048w), cutting image traffic ~10-30x versus the stored original. The
+ * original URL stays untouched everywhere data is stored or exported. Any
+ * format/name already present is replaced, and non-twimg URLs (tests, odd
+ * imports) come back unchanged. */
+export function cdnDisplayUrl(url: string, name: 'small' | 'medium' | 'large' = 'medium'): string {
+  if (!/^https:\/\/(pbs|video)\.twimg\.com\//.test(url)) return url;
+  try {
+    const u = new URL(url);
+    u.searchParams.set('format', 'webp');
+    u.searchParams.set('name', name);
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 /** Load a media CDN image into an <img>: try the CDN directly (fastest where
  * it is reachable), then fall back to the same-origin proxy when the direct
  * load errors out or stalls past timeoutMs (censored networks blackhole the

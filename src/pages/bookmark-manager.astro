@@ -147,7 +147,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
 </Base>
 
 <script>
-  import { extractTweetId, fetchTweet, wireMediaImg, type TweetData } from '../lib/api';
+  import { cdnDisplayUrl, extractTweetId, fetchTweet, wireMediaImg, type TweetData } from '../lib/api';
   import {
     clearBookmarks,
     deleteBookmark,
@@ -331,6 +331,30 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     const mediaList = mediaOf(item);
     if (mediaList.length) {
       const mediaWrap = el('div', 'mt-2.5 space-y-2');
+      const failPlaceholder = (label: string): HTMLElement => {
+        const d = el('div', 'flex h-40 w-full items-center justify-center rounded-xl bg-slate-100 text-xs text-slate-400');
+        d.textContent = label;
+        return d;
+      };
+      // display images use resized WebP variants served by the twimg CDN
+      // (small/medium/large via srcset); the stored URL keeps pointing at the
+      // original, and the proxy fallback fetches the medium variant too. If
+      // both CDN and proxy fail, swap in a placeholder instead of a broken
+      // image icon.
+      const wireDisplayImg = (img: HTMLImageElement, m: BookmarkMedia, extraCls: string) => {
+        img.loading = 'lazy';
+        img.decoding = 'async';
+        img.className = `max-h-96 w-full bg-slate-100 object-cover ${extraCls}`;
+        if (m.width && m.height) img.style.aspectRatio = `${m.width} / ${m.height}`;
+        img.srcset = (['small', 'medium', 'large'] as const)
+          .map((n) => `${cdnDisplayUrl(m.url, n)} ${n === 'small' ? '680w' : n === 'medium' ? '1200w' : '2048w'}`)
+          .join(', ');
+        img.sizes = '(max-width: 768px) 100vw, 700px';
+        img.addEventListener('error', () => {
+          if (img.src.includes('/api/download')) img.replaceWith(failPlaceholder('Media unavailable'));
+        });
+        wireMediaImg(img, cdnDisplayUrl(m.url, 'medium'), 'bookmark-image');
+      };
       for (const m of mediaList) {
         if (m.type === 'video' || m.type === 'animated_gif') {
           const link = document.createElement('a');
@@ -340,9 +364,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
           link.className = 'relative block overflow-hidden rounded-xl bg-slate-100';
           const img = document.createElement('img');
           img.alt = 'Video thumbnail';
-          img.loading = 'lazy';
-          img.className = 'max-h-96 w-full object-cover';
-          wireMediaImg(img, m.url, 'bookmark-video-thumb');
+          wireDisplayImg(img, m, '');
           link.appendChild(img);
           const play = el('span', 'pointer-events-none absolute inset-0 flex items-center justify-center');
           play.innerHTML =
@@ -352,9 +374,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
         } else {
           const img = document.createElement('img');
           img.alt = 'Post image';
-          img.loading = 'lazy';
-          img.className = 'max-h-96 w-full rounded-xl object-cover bg-slate-100';
-          wireMediaImg(img, m.url, 'bookmark-image');
+          wireDisplayImg(img, m, 'rounded-xl');
           mediaWrap.appendChild(img);
         }
       }
