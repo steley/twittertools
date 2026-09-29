@@ -2,7 +2,7 @@
 
 **The independent toolkit for X (Twitter).** Static Astro site + one tiny Python API.
 
-Eight free, no-login tools:
+Ten free, no-login tools:
 
 | Path | Tool | Backend? |
 | --- | --- | --- |
@@ -12,17 +12,20 @@ Eight free, no-login tools:
 | `/bookmark-manager` | Private local bookmark library (IndexedDB), tags/notes, JSON & Markdown export | no |
 | `/tweet-screenshot-generator` | Post → polished PNG card, light/dark, rendered on canvas | no |
 | `/tweet-character-counter` | X weighted counting (CJK ×2, links = 23) | no |
+| `/tweet-splitter` | Break long text into a numbered 280-character thread | no |
+| `/twitter-font-generator` | Bold, italic, script and more Unicode styles for posts and bios | no |
 | `/tweet-url-parser` | URL ↔ ID ↔ Snowflake timestamp | no |
 | `/twitter-advanced-search-builder` | GUI → search operators → open on X | no |
 
 ```
 ├── src/pages/          tool pages + home + privacy + terms (Astro + Tailwind v4)
-├── src/lib/            shared modules: api client, tweet card renderer, bookmark
-│                       store, tweet-count, snowflake, tool registry
+├── src/lib/            shared modules: api client, tweet card renderer + thread
+│                       card, splitter, fonts, bookmark store, tweet-count,
+│                       snowflake, tool registry
 ├── server/             downloader_server.py (aiohttp) + systemd unit + mock/dev tooling
 ├── deploy/             Apache vhost + nginx config (alternative)
-├── scripts/            gen_og.py (social card), smoke.mjs (page smoke tests)
-└── public/             robots.txt, favicon.svg, og.png
+├── scripts/            gen_og.py (social card), gen_pwa_icons.py, smoke.mjs (page tests)
+└── public/             robots.txt, favicon.svg, og.png, manifest.webmanifest, icons/, bookmark-manager/sw.js
 ```
 
 ## How the data tools work (no paid X API)
@@ -99,7 +102,7 @@ variants, `222222222222222222` photos, `333333333333333333` a reply-chain sample
 ## Production build
 
 ```bash
-npm run build               # -> dist/  (11 pages, sitemap-index.xml included)
+npm run build               # -> dist/  (13 pages, sitemap-index.xml included)
 ```
 
 Verify `dist/` contains no dev references: `grep -r "127.0.0.1" dist/` should be empty.

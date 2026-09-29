@@ -182,10 +182,13 @@ export function wireMediaImg(img: HTMLImageElement, mediaUrl: string, filename: 
     /* keep host '' — treated as unknown, probe still happens */
   }
   let swapped = false;
-  const swap = () => {
+  // `stall` marks the 12h blocked-CDN memory: only a hang means the CDN is
+  // unreachable. A fast error (404 on a deleted post, say) swaps instantly
+  // and costs nothing — it must not poison the flag for healthy networks.
+  const swap = (stall: boolean) => {
     if (swapped) return;
     swapped = true;
-    markCdnDirectBlocked(host);
+    if (stall) markCdnDirectBlocked(host);
     // srcset (direct CDN variants) MUST be dropped: while present, the
     // browser picks candidates from it and ignores src — the proxied swap
     // would never display on networks where the CDN is blocked
@@ -193,7 +196,7 @@ export function wireMediaImg(img: HTMLImageElement, mediaUrl: string, filename: 
     img.sizes = '';
     img.src = proxiedDownloadUrl(mediaUrl, filename, true);
   };
-  img.onerror = swap;
+  img.onerror = () => swap(false);
   // a direct success proves the CDN is reachable again — back to direct
   img.addEventListener(
     'load',
@@ -211,14 +214,14 @@ export function wireMediaImg(img: HTMLImageElement, mediaUrl: string, filename: 
   // here would needlessly pull them through the proxy. Re-check every window
   // until the image nears the viewport, then give the CDN one last window.
   const stalled = () => {
-    if (swapped) return;
+    if (swapped || (img.complete && img.naturalWidth)) return; // done either way
     const rect = img.getBoundingClientRect();
     const near = rect.top < window.innerHeight * 2 && rect.bottom > -window.innerHeight;
     if (!near) {
       setTimeout(stalled, timeoutMs);
       return;
     }
-    if (!img.complete || !img.naturalWidth) swap();
+    if (!img.complete || !img.naturalWidth) swap(true);
   };
   setTimeout(stalled, timeoutMs);
 }
