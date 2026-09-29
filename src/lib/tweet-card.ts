@@ -594,9 +594,12 @@ export async function renderThreadCard(
   const baseY = footY + 24;
   const H = Math.round(baseY + PAD);
 
-  canvas.width = W * SCALE;
-  canvas.height = H * SCALE;
-  ctx.setTransform(SCALE, 0, 0, SCALE, 0, 0);
+  // iOS Safari caps total canvas area (~16.7M px): a very long thread at 2x
+  // would blow past it and toBlob() would fail — drop to 1x export instead
+  const scale = W * H * SCALE * SCALE > 16_500_000 ? 1 : SCALE;
+  canvas.width = W * scale;
+  canvas.height = H * scale;
+  ctx.setTransform(scale, 0, 0, scale, 0, 0);
   ctx.clearRect(0, 0, W, H);
 
   rr(ctx, 0.5, 0.5, W - 1, H - 1, 20);

@@ -248,7 +248,9 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').sl
       const name = el('p', 'truncate text-sm font-medium text-slate-800');
       name.textContent = `${r.user?.name ?? 'Unknown'} @${r.user?.screenName ?? '?'}`;
       const text = el('p', 'mt-0.5 line-clamp-1 text-xs text-slate-500');
-      text.textContent = r.text;
+      // same leading-mention strip the card applies, so the preview matches
+      const handle = main.user?.screenName;
+      text.textContent = handle ? r.text.replace(new RegExp(`^@${handle}\\s+`, 'i'), '') : r.text;
       who.append(name, text);
       row.appendChild(who);
       wrap.appendChild(row);
