@@ -328,8 +328,9 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
 
     // inline media, the same structure for every bookmark type: one item
     // shows whole at its natural aspect (height-capped, left-aligned, never
-    // stretched or cropped); two or more sit in a mini-carousel switched
-    // with arrow buttons
+    // stretched or cropped); multiple items line up horizontally in one row
+    // at the same height, and only when the row overflows the card do arrow
+    // buttons appear to scroll through it (native swipe works too)
     const mediaList = mediaOf(item);
     if (mediaList.length) {
       const failPlaceholder = (label: string, cls = 'flex h-40 w-full items-center justify-center rounded-xl bg-slate-100 text-xs text-slate-400'): HTMLElement => {
@@ -360,42 +361,35 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
           '<span class="flex h-12 w-12 items-center justify-center rounded-full bg-black/60 text-lg text-white">▶</span>';
         return play;
       };
-      // the whole media visible: natural aspect from the stored dimensions
-      // (reserves the box before the bytes arrive), capped at the 384px media
-      // height, width follows the ratio — no stretching, no cropping
-      const fitImg = (m: BookmarkMedia): HTMLImageElement => {
+      if (mediaList.length === 1) {
+        // whole media visible: natural aspect from the stored dimensions
+        // (reserves the box before the bytes arrive), capped at the 384px
+        // media height, width follows the ratio — left-aligned
+        const m = mediaList[0];
+        const isVideo = m.type === 'video' || m.type === 'animated_gif';
         const img = document.createElement('img');
-        img.alt = m.type === 'video' || m.type === 'animated_gif' ? 'Video thumbnail' : 'Post image';
-        img.className = 'block max-h-96 w-auto max-w-full bg-slate-100';
+        img.alt = isVideo ? 'Video thumbnail' : 'Post image';
+        img.className = 'block max-h-96 w-auto max-w-full bg-slate-100' + (isVideo ? '' : ' rounded-xl');
         if (m.width && m.height) img.style.aspectRatio = `${m.width} / ${m.height}`;
         setVariants(img, m, '(max-width: 768px) 100vw, 700px');
-        return img;
-      };
-      const buildSlide = (m: BookmarkMedia): HTMLElement => {
-        if (m.type === 'video' || m.type === 'animated_gif') {
+        const wrap = el('div', 'mt-2.5');
+        if (isVideo) {
           const link = document.createElement('a');
           link.href = safeUrl(item);
           link.target = '_blank';
           link.rel = 'noopener noreferrer';
           link.className = 'relative inline-block overflow-hidden rounded-xl bg-slate-100';
-          link.appendChild(fitImg(m));
+          link.appendChild(img);
           link.appendChild(playBadge());
-          return link;
+          wrap.appendChild(link);
+        } else {
+          wrap.appendChild(img);
         }
-        const img = fitImg(m);
-        img.className += ' rounded-xl';
-        return img;
-      };
-      if (mediaList.length === 1) {
-        const wrap = el('div', 'mt-2.5');
-        wrap.appendChild(buildSlide(mediaList[0]));
         main.appendChild(wrap);
       } else {
-        let idx = 0;
-        const wrap = el('div', 'relative mt-2.5 h-96 overflow-hidden rounded-xl bg-slate-100');
-        const stage = el('div', 'flex h-full items-start');
-        const counter = el('span', 'absolute right-2 top-2 z-10 rounded-full bg-black/50 px-2 py-0.5 text-xs font-medium text-white');
-        const arrow = (dir: -1 | 1, label: string, glyph: string) => {
+        const wrap = el('div', 'relative mt-2.5');
+        const strip = el('div', 'flex h-96 gap-2 overflow-x-auto rounded-xl bg-slate-100 scroll-smooth');
+        const arrow = (dir: -1 | 1, label: string, glyph: string, onClick: () => void) => {
           const b = el(
             'button',
             `absolute top-1/2 z-10 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full bg-black/50 text-base leading-none text-white hover:bg-black/70 ${dir === -1 ? 'left-2' : 'right-2'}`
@@ -403,23 +397,49 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
           b.type = 'button';
           b.setAttribute('aria-label', label);
           b.textContent = glyph;
-          b.addEventListener('click', () => {
-            idx = (idx + dir + mediaList.length) % mediaList.length;
-            paint();
-          });
+          b.addEventListener('click', onClick);
           return b;
         };
-        const paint = () => {
-          stage.replaceChildren();
-          stage.appendChild(buildSlide(mediaList[idx]));
-          counter.textContent = `${idx + 1}/${mediaList.length}`;
+        const prev = arrow(-1, 'Scroll back', '‹', () => strip.scrollBy({ left: -strip.clientWidth * 0.8, behavior: 'smooth' }));
+        const next = arrow(1, 'Scroll forward', '›', () => strip.scrollBy({ left: strip.clientWidth * 0.8, behavior: 'smooth' }));
+        // arrows only when the row doesn't fit the card
+        const updateArrows = () => {
+          const overflow = strip.scrollWidth > strip.clientWidth + 4;
+          prev.classList.toggle('hidden', !overflow);
+          next.classList.toggle('hidden', !overflow);
         };
-        wrap.appendChild(stage);
-        wrap.appendChild(arrow(-1, 'Previous image', '‹'));
-        wrap.appendChild(arrow(1, 'Next image', '›'));
-        wrap.appendChild(counter);
-        paint();
+        strip.addEventListener('scroll', updateArrows, { passive: true });
+        const stripFail = 'flex h-96 w-72 shrink-0 items-center justify-center bg-slate-200 text-xs text-slate-400';
+        for (const m of mediaList) {
+          const isVideo = m.type === 'video' || m.type === 'animated_gif';
+          const img = document.createElement('img');
+          img.alt = isVideo ? 'Video thumbnail' : 'Post image';
+          img.className = isVideo
+            ? 'block h-full w-auto bg-slate-100'
+            : 'block h-96 w-auto shrink-0 rounded-xl bg-slate-100';
+          if (m.width && m.height) img.style.aspectRatio = `${m.width} / ${m.height}`;
+          setVariants(img, m, '(max-width: 768px) 100vw, 700px', stripFail);
+          img.addEventListener('load', updateArrows);
+          if (isVideo) {
+            const link = document.createElement('a');
+            link.href = safeUrl(item);
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.className = 'relative block h-full shrink-0 overflow-hidden rounded-xl bg-slate-100';
+            link.appendChild(img);
+            link.appendChild(playBadge());
+            strip.appendChild(link);
+          } else {
+            strip.appendChild(img);
+          }
+        }
+        wrap.appendChild(strip);
+        wrap.appendChild(prev);
+        wrap.appendChild(next);
         main.appendChild(wrap);
+        // the row may overflow as soon as the reserved boxes land — and legacy
+        // entries without stored dimensions only know their width after load
+        updateArrows();
       }
     }
 
