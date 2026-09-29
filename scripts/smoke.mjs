@@ -78,6 +78,21 @@ await page.goto(BASE + '/tweet-url-parser/', { waitUntil: 'domcontentloaded' });
 await page.fill('#parser-input', 'https://x.com/user/status/1500000000000000000');
 await expectVisible(page.locator('#p-id:has-text("1500000000000000000")'), 'parser shows tweet id');
 
+// 6. download proxy streams the mock media with an attachment header (exercises
+// the media-host allowlist and the streaming path end to end)
+const dl = await page.evaluate(async () => {
+  const res = await fetch(
+    '/api/download?url=http%3A%2F%2F127.0.0.1%3A8899%2Fvideo-832.mp4&name=smoke.mp4'
+  );
+  return { ok: res.ok, status: res.status, disposition: res.headers.get('content-disposition') ?? '' };
+});
+if (dl.ok && dl.disposition.includes('attachment')) {
+  console.log('  ok  download proxy streams with attachment header');
+} else {
+  failures.push('download proxy');
+  console.log(`FAIL  download proxy (status ${dl.status}, disposition "${dl.disposition}")`);
+}
+
 await browser.close();
 
 if (pageErrors.length) {
