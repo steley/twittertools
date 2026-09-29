@@ -206,7 +206,9 @@ export function wireMediaImg(img: HTMLImageElement, mediaUrl: string, filename: 
     { once: true }
   );
   if (cdnDirectBlocked(host)) {
-    swap();
+    // already on record as blocked — straight to the proxy, and do NOT
+    // re-stamp the memory (it would roll the 12h window forward forever)
+    swap(false);
     return;
   }
   img.src = mediaUrl;
