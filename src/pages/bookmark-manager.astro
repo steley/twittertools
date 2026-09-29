@@ -259,9 +259,16 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
       // the video CDN is blocked outright on some networks (no stall like
       // images — a hard error): retry once through the same-origin proxy;
       // play=1 gives inline disposition + Range passthrough, so the
-      // timeline scrubs even on the fallback
-      v.addEventListener('error', () => {
+      // timeline scrubs even on the fallback. iOS additionally HANGS on
+      // blocked CDNs without firing error — a canplay watchdog catches that.
+      const fallbackToProxy = () => {
         if (!v.src.includes('/api/download')) v.src = proxiedDownloadUrl(m.videoUrl!, 'video.mp4', true);
+      };
+      const stallTimer = window.setTimeout(fallbackToProxy, 6000);
+      v.addEventListener('canplay', () => window.clearTimeout(stallTimer), { once: true });
+      v.addEventListener('error', () => {
+        window.clearTimeout(stallTimer);
+        fallbackToProxy();
       });
       v.addEventListener('click', (e) => e.stopPropagation());
       viewerStage.appendChild(v);

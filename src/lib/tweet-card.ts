@@ -176,8 +176,9 @@ async function loadImage(url: string): Promise<HTMLImageElement | null> {
       }
       // fall back to our same-origin media proxy (never taints the canvas —
       // the proxy always answers with Access-Control-Allow-Origin, so load
-      // it in CORS mode or the canvas gets tainted and export fails)
-      return raceTimeout(img(proxiedDownloadUrl(url, 'card-media'), true), 12000);
+      // it in CORS mode or the canvas gets tainted and export fails).
+      // Inline disposition: iOS Safari refuses attachment-served images.
+      return raceTimeout(img(proxiedDownloadUrl(url, 'card-media', true), true), 12000);
     })();
     imgCache.set(url, entry);
   }

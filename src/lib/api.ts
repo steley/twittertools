@@ -133,14 +133,15 @@ export function cdnDisplayUrl(url: string, name: 'small' | 'medium' | 'large' = 
 /** Load a media CDN image into an <img>: try the CDN directly (fastest where
  * it is reachable), then fall back to the same-origin proxy when the direct
  * load errors out or stalls past timeoutMs (censored networks blackhole the
- * CDN instead of erroring), so previews still display. */
+ * CDN instead of erroring), so previews still display. The fallback is
+ * inline-disposition: iOS Safari refuses to render attachment-served media. */
 export function wireMediaImg(img: HTMLImageElement, mediaUrl: string, filename: string, timeoutMs = 2500): void {
   img.referrerPolicy = 'no-referrer';
   let swapped = false;
   const swap = () => {
     if (swapped) return;
     swapped = true;
-    img.src = proxiedDownloadUrl(mediaUrl, filename);
+    img.src = proxiedDownloadUrl(mediaUrl, filename, true);
   };
   img.onerror = swap;
   img.src = mediaUrl;
