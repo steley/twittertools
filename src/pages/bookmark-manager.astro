@@ -606,6 +606,14 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     (open as HTMLAnchorElement).rel = 'noopener noreferrer';
     open.textContent = 'Open on X ↗';
     actions.appendChild(open);
+    // one-click handoff to the Screenshot Generator (same card, curated)
+    const shot = el('button', 'rounded-full border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand');
+    shot.textContent = 'Screenshot';
+    shot.addEventListener('click', () => {
+      sessionStorage.setItem('twittertools:ss-links', JSON.stringify([safeUrl(item)]));
+      window.location.href = '/tweet-screenshot-generator/';
+    });
+    actions.appendChild(shot);
     const edit = el('button', 'rounded-full border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand');
     edit.textContent = 'Edit';
     actions.appendChild(edit);

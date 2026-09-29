@@ -581,7 +581,15 @@ export async function renderThreadCard(
   if (!ctx) throw new Error('Canvas not supported in this browser.');
 
   const mainBlock = await measurePost(ctx, main);
-  const replyBlocks = await Promise.all(replies.map((r) => measurePost(ctx, r, mainBlock.post)));
+  // each reply's parent is the PREVIOUS post in the card, not the main post —
+  // a reply-to-a-reply mentions the reply above it, and that mention is the
+  // one turned into the muted "Replying to" line
+  const replyBlocks: PostBlock[] = [];
+  let prev = mainBlock.post;
+  for (const r of replies) {
+    replyBlocks.push(await measurePost(ctx, r, prev));
+    prev = r;
+  }
 
   // layout: main block + permalink + divider, then per reply (gap + block +
   // divider), then the footer

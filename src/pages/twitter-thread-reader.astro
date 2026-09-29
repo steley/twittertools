@@ -118,6 +118,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       <button data-tr-export="mdfile" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Export .md</button>
       <button data-tr-export="html" class="tr-exp rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white hover:bg-brand-dark">Export HTML</button>
       <button data-tr-export="pdf" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Export PDF</button>
+      <button data-tr-export="image" class="tr-exp rounded-full border border-brand px-4 py-2 text-xs font-semibold text-brand hover:bg-brand hover:text-white">Export as image →</button>
     </div>
 
     <p
@@ -265,6 +266,8 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     sel?: boolean;
     images?: SimpleImage[];
     media?: SimpleMedia[]; // videos / GIFs: poster thumbnail, linked out to X
+    /** Embedded quoted post, shown as a small inline card. */
+    quoted?: { name: string; handle: string; text: string };
   }
 
   let thread: SimpleTweet[] = [];
@@ -438,6 +441,17 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       body.textContent = t.text;
       col.appendChild(body);
 
+      // embedded quoted post, X-style small card
+      if (t.quoted) {
+        const q = el('blockquote', 'mt-2 rounded-r-lg border-l-2 border-slate-300 bg-slate-50 py-2 pl-3 pr-2');
+        const qWho = el('p', 'text-xs text-slate-500');
+        qWho.textContent = `${t.quoted.name} @${t.quoted.handle}`;
+        const qText = el('p', 'mt-1 line-clamp-3 whitespace-pre-wrap text-xs leading-relaxed text-slate-600');
+        qText.textContent = t.quoted.text;
+        q.append(qWho, qText);
+        col.appendChild(q);
+      }
+
       if (t.images?.length) col.appendChild(buildImages(t.images));
       for (const m of t.media ?? []) col.appendChild(buildVideoCard(m));
       row.appendChild(col);
@@ -559,6 +573,13 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
           label: m.type === 'animated_gif' ? 'GIF' : 'Video',
           postUrl: t.url,
         })),
+      quoted: t.quoted
+        ? {
+            name: t.quoted.user?.name ?? 'Unknown',
+            handle: t.quoted.user?.screenName ?? 'unknown',
+            text: t.quoted.text,
+          }
+        : undefined,
     };
   }
 
@@ -957,6 +978,22 @@ footer a{color:#64748b}
           w.document.write(pdfDoc());
           w.document.close();
           break;
+        }
+        case 'image': {
+          // hand the selected posts' links to the Screenshot Generator, which
+          // renders them as one thread card (paste-mode text posts carry no
+          // link and can't take part)
+          const links = selected()
+            .map((t) => t.url)
+            .filter(Boolean);
+          if (!links.length) {
+            showError('These posts have no links (paste-mode text) — the image export needs post links.');
+            return;
+          }
+          sessionStorage.setItem('twittertools:ss-links', JSON.stringify(links));
+          btn.textContent = 'Opening…';
+          window.location.href = '/tweet-screenshot-generator/';
+          return; // navigating — skip the "✓ Done" feedback
         }
       }
       const old = btn.textContent;

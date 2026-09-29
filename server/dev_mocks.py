@@ -30,6 +30,16 @@ async def mock_syndication(request):
         "1313131313131313131": tweet_obj(
             "1313131313131313131", "@mockuser Couldn't agree more — she earned it.", "otheruser"
         ),
+        # reply-to-a-reply: mentions the PREVIOUS reply's author (otheruser),
+        # not the main post's — exercises the chain-parent mention strip
+        "1515151515151515151": tweet_obj(
+            "1515151515151515151", "@otheruser the podium shots are stunning.", "thirduser"
+        ),
+        # post with an embedded quoted tweet (thread reader inline card)
+        "1717171717171717171": dict(
+            tweet_obj("1717171717171717171", "Worth quoting in full.", "mockuser"),
+            quoted_tweet=tweet_obj("1616161616161616161", "Original take worth quoting.", "otheruser"),
+        ),
     }
     data = fixtures.get(request.query.get("id", ""))
     if data is None:

@@ -231,6 +231,7 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').sl
     const label = el('p', 'text-xs font-medium text-slate-500');
     label.textContent = 'Replies included in the card — untick to drop:';
     wrap.appendChild(label);
+    let prevHandle = main.user?.screenName ?? '';
     replies.forEach((r) => {
       const row = el('label', 'mt-3 flex cursor-pointer items-start gap-3');
       const cb = document.createElement('input');
@@ -248,12 +249,14 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').sl
       const name = el('p', 'truncate text-sm font-medium text-slate-800');
       name.textContent = `${r.user?.name ?? 'Unknown'} @${r.user?.screenName ?? '?'}`;
       const text = el('p', 'mt-0.5 line-clamp-1 text-xs text-slate-500');
-      // same leading-mention strip the card applies, so the preview matches
-      const handle = main.user?.screenName;
-      text.textContent = handle ? r.text.replace(new RegExp(`^@${handle}\\s+`, 'i'), '') : r.text;
+      // mirror the card: strip a leading mention of the PREVIOUS post's author
+      const self = !prevHandle || !r.user?.screenName || r.user.screenName.toLowerCase() === prevHandle.toLowerCase();
+      const m = self ? null : r.text.match(new RegExp(`^@${prevHandle}\\s+`, 'i'));
+      text.textContent = m ? r.text.slice(m[0].length) : r.text;
       who.append(name, text);
       row.appendChild(who);
       wrap.appendChild(row);
+      prevHandle = r.user?.screenName ?? prevHandle;
     });
     tweetBox.appendChild(wrap);
   }
@@ -323,4 +326,16 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').sl
     urlInput.value = deepLink;
     form.requestSubmit();
   }
+
+  // Handoff from the Thread Reader ("Export as image"): a prefilled link list
+  try {
+    const handoff = JSON.parse(sessionStorage.getItem('twittertools:ss-links') ?? 'null');
+    if (Array.isArray(handoff) && handoff.length && !urlInput.value) {
+      urlInput.value = handoff.join('\n');
+      form.requestSubmit();
+    }
+  } catch {
+    /* malformed handoff — ignore */
+  }
+  sessionStorage.removeItem('twittertools:ss-links');
 </script>
