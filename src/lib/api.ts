@@ -141,6 +141,11 @@ export function wireMediaImg(img: HTMLImageElement, mediaUrl: string, filename: 
   const swap = () => {
     if (swapped) return;
     swapped = true;
+    // srcset (direct CDN variants) MUST be dropped: while present, the
+    // browser picks candidates from it and ignores src — the proxied swap
+    // would never display on networks where the CDN is blocked
+    img.srcset = '';
+    img.sizes = '';
     img.src = proxiedDownloadUrl(mediaUrl, filename, true);
   };
   img.onerror = swap;
