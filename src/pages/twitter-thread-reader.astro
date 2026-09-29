@@ -118,7 +118,6 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       <button data-tr-export="mdfile" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Export .md</button>
       <button data-tr-export="html" class="tr-exp rounded-full bg-brand px-4 py-2 text-xs font-semibold text-white hover:bg-brand-dark">Export HTML</button>
       <button data-tr-export="pdf" class="tr-exp rounded-full border border-slate-300 px-4 py-2 text-xs font-medium text-slate-600 hover:border-brand hover:text-brand">Export PDF</button>
-      <button data-tr-export="image" class="tr-exp rounded-full border border-brand px-4 py-2 text-xs font-semibold text-brand hover:bg-brand hover:text-white">Export as image →</button>
     </div>
 
     <p
@@ -978,22 +977,6 @@ footer a{color:#64748b}
           w.document.write(pdfDoc());
           w.document.close();
           break;
-        }
-        case 'image': {
-          // hand the selected posts' links to the Screenshot Generator, which
-          // renders them as one thread card (paste-mode text posts carry no
-          // link and can't take part)
-          const links = selected()
-            .map((t) => t.url)
-            .filter(Boolean);
-          if (!links.length) {
-            showError('These posts have no links (paste-mode text) — the image export needs post links.');
-            return;
-          }
-          sessionStorage.setItem('twittertools:ss-links', JSON.stringify(links));
-          btn.textContent = 'Opening…';
-          window.location.href = '/tweet-screenshot-generator/';
-          return; // navigating — skip the "✓ Done" feedback
         }
       }
       const old = btn.textContent;
