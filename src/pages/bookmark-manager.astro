@@ -211,31 +211,105 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     return t === 'photo' && b.mediaType === 'video' && (b.media ?? []).some((m) => m.type === 'photo');
   };
 
-  // --- lightbox ---------------------------------------------------------------
-  // Click any media image to enlarge it. The overlay reuses the exact URL the
-  // card is already rendering (img.currentSrc), so it always hits the browser
-  // cache — no re-download. Click anywhere or press Esc to close.
-  const lightbox = el('div', 'fixed inset-0 z-50 hidden cursor-zoom-out items-center justify-center bg-black/85 p-6');
-  const lightImg = document.createElement('img');
-  lightImg.alt = '';
-  lightImg.className = 'max-h-full max-w-full object-contain';
-  lightbox.appendChild(lightImg);
-  const closeLightbox = () => {
-    lightbox.classList.add('hidden');
-    lightbox.classList.remove('flex');
-    lightImg.removeAttribute('src');
+  // --- media viewer ------------------------------------------------------------
+  // Click any media image to enlarge it. Images reuse the exact URL the card
+  // is already rendering (img.currentSrc — always a cache hit, no
+  // re-download); videos play inline from the MP4 variant stored with the
+  // bookmark (legacy entries without one fall back to their poster). Posts
+  // with several items get prev/next arrows and the arrow keys; click the
+  // backdrop or press Esc to close.
+  const viewer = el('div', 'fixed inset-0 z-50 hidden items-center justify-center bg-black/85 p-6');
+  const viewerStage = el('div', 'relative flex max-h-full max-w-full items-center justify-center');
+  // lives on the overlay, not the stage: renderViewer() replaces the stage's
+  // children on every switch and would take the counter down with them
+  const viewerCounter = el('span', 'absolute top-3 right-3 rounded-full bg-black/60 px-2.5 py-1 text-xs font-medium text-white');
+  let viewerList: BookmarkMedia[] = [];
+  let viewerImgs: (HTMLImageElement | null)[] = [];
+  let viewerIdx = 0;
+  let viewerVideo: HTMLVideoElement | null = null;
+  const stopViewerVideo = () => {
+    if (viewerVideo) {
+      viewerVideo.pause();
+      viewerVideo = null;
+    }
   };
-  const openLightbox = (img: HTMLImageElement) => {
-    if (!img.complete || !img.naturalWidth) return; // nothing rendered yet
-    lightImg.src = img.currentSrc || img.src;
-    lightbox.classList.remove('hidden');
-    lightbox.classList.add('flex');
+  const renderViewer = () => {
+    const m = viewerList[viewerIdx];
+    const cardImg = viewerImgs[viewerIdx] ?? null;
+    stopViewerVideo();
+    viewerStage.replaceChildren();
+    const playsInline = (m.type === 'video' || m.type === 'animated_gif') && !!m.videoUrl;
+    if (playsInline) {
+      const v = document.createElement('video');
+      v.controls = true;
+      v.autoplay = true;
+      v.setAttribute('playsinline', '');
+      v.className = 'max-h-[80vh] max-w-full';
+      if (cardImg) v.poster = cardImg.currentSrc || cardImg.src;
+      v.src = m.videoUrl!;
+      v.addEventListener('click', (e) => e.stopPropagation());
+      viewerStage.appendChild(v);
+      viewerVideo = v;
+    } else {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.className = 'max-h-[80vh] max-w-full object-contain';
+      img.src = cardImg ? cardImg.currentSrc || cardImg.src : m.url;
+      img.addEventListener('click', (e) => e.stopPropagation());
+      viewerStage.appendChild(img);
+    }
+    const many = viewerList.length > 1;
+    prevBtn.classList.toggle('hidden', !many);
+    nextBtn.classList.toggle('hidden', !many);
+    viewerCounter.classList.toggle('hidden', !many);
+    if (many) viewerCounter.textContent = `${viewerIdx + 1}/${viewerList.length}`;
   };
-  lightbox.addEventListener('click', closeLightbox);
+  const moveViewer = (dir: -1 | 1) => {
+    viewerIdx = (viewerIdx + dir + viewerList.length) % viewerList.length;
+    renderViewer();
+  };
+  const closeViewer = () => {
+    stopViewerVideo();
+    viewer.classList.add('hidden');
+    viewer.classList.remove('flex');
+  };
+  const viewerArrow = (dir: -1 | 1, glyph: string) => {
+    const b = el(
+      'button',
+      `absolute top-1/2 z-10 flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-black/60 text-xl leading-none text-white hover:bg-black/80 ${dir === -1 ? 'left-3' : 'right-3'}`
+    ) as HTMLButtonElement;
+    b.type = 'button';
+    b.setAttribute('aria-label', dir === -1 ? 'Previous item' : 'Next item');
+    b.textContent = glyph;
+    b.addEventListener('click', (e) => {
+      e.stopPropagation();
+      moveViewer(dir);
+    });
+    return b;
+  };
+  const prevBtn = viewerArrow(-1, '‹');
+  const nextBtn = viewerArrow(1, '›');
+  const openViewer = (list: BookmarkMedia[], idx: number, imgs: (HTMLImageElement | null)[]) => {
+    if (!imgs[idx]) return; // nothing rendered yet
+    viewerList = list;
+    viewerImgs = imgs;
+    viewerIdx = idx;
+    renderViewer();
+    viewer.classList.remove('hidden');
+    viewer.classList.add('flex');
+  };
+  viewer.appendChild(prevBtn);
+  viewer.appendChild(nextBtn);
+  viewer.appendChild(viewerStage);
+  viewer.appendChild(viewerCounter);
+  viewer.addEventListener('click', closeViewer);
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && !lightbox.classList.contains('hidden')) closeLightbox();
+    if (viewer.classList.contains('hidden')) return;
+    if (e.key === 'Escape') closeViewer();
+    if (e.key === 'ArrowLeft') moveViewer(-1);
+    if (e.key === 'ArrowRight') moveViewer(1);
   });
-  document.body.appendChild(lightbox);
+  document.body.appendChild(viewer);
 
   // --- filtering ----------------------------------------------------------
   function visible(): BookmarkItem[] {
@@ -374,7 +448,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
         img.alt = m.type === 'video' || m.type === 'animated_gif' ? 'Video thumbnail' : 'Post image';
         img.loading = 'lazy';
         img.decoding = 'async';
-        img.className = `${cls} cursor-zoom-in`;
+        img.className = `${cls} ${m.type === 'video' || m.type === 'animated_gif' ? 'cursor-pointer' : 'cursor-zoom-in'}`;
         if (m.width && m.height) img.style.aspectRatio = `${m.width} / ${m.height}`;
         img.srcset = (['small', 'medium', 'large'] as const)
           .map((n) => `${cdnDisplayUrl(m.url, n)} ${n === 'small' ? '680w' : n === 'medium' ? '1200w' : '2048w'}`)
@@ -382,13 +456,6 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
         img.sizes = '(max-width: 768px) 100vw, 700px';
         img.addEventListener('error', () => {
           if (img.src.includes('/api/download')) img.replaceWith(failPlaceholder('Media unavailable', failCls));
-        });
-        // enlarge on click; stopPropagation/preventDefault so a poster inside
-        // its post link enlarges instead of navigating
-        img.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          openLightbox(img);
         });
         wireMediaImg(img, cdnDisplayUrl(m.url, 'medium'), 'bookmark-image');
         return img;
@@ -406,6 +473,11 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
         const m = mediaList[0];
         const isVideo = m.type === 'video' || m.type === 'animated_gif';
         const img = makeImg(m, 'block max-h-96 w-auto max-w-full bg-slate-100' + (isVideo ? '' : ' rounded-xl'));
+        img.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openViewer(mediaList, 0, [img]);
+        });
         const wrap = el('div', 'mt-2.5');
         if (isVideo) {
           const link = document.createElement('a');
@@ -444,7 +516,8 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
         };
         strip.addEventListener('scroll', updateArrows, { passive: true });
         const stripFail = 'flex h-96 w-72 shrink-0 items-center justify-center bg-slate-200 text-xs text-slate-400';
-        for (const m of mediaList) {
+        const stripImgs: HTMLImageElement[] = [];
+        mediaList.forEach((m, i) => {
           const isVideo = m.type === 'video' || m.type === 'animated_gif';
           const img = makeImg(
             m,
@@ -454,6 +527,13 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
             stripFail,
           );
           img.addEventListener('load', updateArrows);
+          // poster click plays/enlarges instead of following the post link
+          img.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            openViewer(mediaList, i, stripImgs);
+          });
+          stripImgs.push(img);
           if (isVideo) {
             const link = document.createElement('a');
             link.href = safeUrl(item);
@@ -466,7 +546,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
           } else {
             strip.appendChild(img);
           }
-        }
+        });
         wrap.appendChild(strip);
         wrap.appendChild(prev);
         wrap.appendChild(next);

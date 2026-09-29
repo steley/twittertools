@@ -9,13 +9,15 @@ import type { TweetData } from './api';
 export type BookmarkType = 'video' | 'photo' | 'thread' | 'text' | 'article';
 
 /** One media item as stored with the snapshot: photos carry the full image,
- * videos/GIFs carry the poster thumbnail (postUrl links back to the post). */
+ * videos/GIFs carry the poster thumbnail (postUrl links back to the post) and
+ * their best MP4 variant so the viewer can play them inline. */
 export interface BookmarkMedia {
   type: 'photo' | 'video' | 'animated_gif';
   url: string;
   width?: number | null;
   height?: number | null;
   postUrl?: string;
+  videoUrl?: string;
 }
 
 export interface BookmarkItem {
@@ -51,6 +53,12 @@ export function tweetToBookmark(t: TweetData): BookmarkItem {
     width: m.width,
     height: m.height,
     postUrl: t.url,
+    videoUrl:
+      m.type === 'video' || m.type === 'animated_gif'
+        ? (m.variants ?? [])
+            .filter((v) => v.contentType === 'video/mp4')
+            .sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))[0]?.url
+        : undefined,
   }));
   return {
     id: t.id,
@@ -161,6 +169,7 @@ export function normalizeItem(raw: unknown): BookmarkItem {
           width: typeof m?.width === 'number' ? m.width : null,
           height: typeof m?.height === 'number' ? m.height : null,
           postUrl: str(m?.postUrl) || undefined,
+          videoUrl: str(m?.videoUrl) || undefined,
         }))
         .filter((m) => m.url.startsWith('https://'))
     : // legacy entries (and old exports) only carry the thumbnail
