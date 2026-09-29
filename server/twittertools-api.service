@@ -10,6 +10,9 @@ WorkingDirectory=/var/www/twittertools/server
 ExecStart=/var/www/twittertools/server/.venv/bin/python downloader_server.py
 Environment=PORT=8787
 Environment=BIND=127.0.0.1
+# tweet cache state lives outside the code tree (rsync-proof, FHS-correct);
+# create it once with: install -d -o www-data -g www-data /var/lib/twittertools
+Environment=TT_CACHE_FILE=/var/lib/twittertools/tweet_cache.json
 Restart=always
 RestartSec=3
 User=www-data
@@ -20,9 +23,9 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-# strict makes the whole filesystem read-only; allow writing the tweet cache
-# next to the script (tweet_cache.json, see TT_CACHE_FILE)
-ReadWritePaths=/var/www/twittertools/server
+# strict makes the whole filesystem read-only; the state dir for the tweet
+# cache is the one place the service writes (owned by www-data)
+ReadWritePaths=/var/lib/twittertools
 
 [Install]
 WantedBy=multi-user.target

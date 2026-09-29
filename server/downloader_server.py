@@ -332,10 +332,13 @@ class SlidingWindowLimiter:
 
 def _cache_path() -> Optional[Path]:
     """TT_CACHE_FILE="" disables persistence; unset defaults to a file next
-    to this script (survives restarts, dies with the working tree)."""
+    to this script, resolved to an ABSOLUTE path — a relative __file__ (how
+    Python 3.8 reports `python downloader_server.py`) would otherwise make
+    the cache location depend on the working directory. Production points
+    TT_CACHE_FILE at /var/lib/twittertools/ (service-owned state dir)."""
     raw = os.environ.get("TT_CACHE_FILE")
     if raw is None:
-        return Path(__file__).with_name("tweet_cache.json")
+        return Path(__file__).resolve().with_name("tweet_cache.json")
     return Path(raw) if raw else None
 
 

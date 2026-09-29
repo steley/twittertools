@@ -134,19 +134,20 @@ rsync -av --delete deploy/ root@VPS_IP:/var/www/twittertools/deploy/
 apt update && apt install -y python3-venv   # fresh Ubuntu: python3 -m venv fails without it
 cd /var/www/twittertools/server
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+install -d -o www-data -g www-data /var/lib/twittertools   # tweet cache state dir (service-writable)
 cp twittertools-api.service /etc/systemd/system/   # paths inside match this layout
 systemctl daemon-reload && systemctl enable --now twittertools-api
 curl http://127.0.0.1:8787/health          # -> ok
 curl http://127.0.0.1:8787/api/healthz     # -> aggregate stats (uptime, statuses, cache)
 ```
 
-The tweet cache persists to `server/tweet_cache.json` (created on first write;
-`TT_CACHE_FILE` moves or disables it). SIGTERM (a systemd restart) flushes it —
-the on-disk entries survive deploys and warm the next boot. The unit's
-`ReadWritePaths=/var/www/twittertools/server` line is what makes that writable
-under `ProtectSystem=strict` — if it's missing, the backend logs a one-time
-"staying memory-only" warning to the journal and keeps working without
-persistence.
+The tweet cache persists to `/var/lib/twittertools/tweet_cache.json` (set via
+`TT_CACHE_FILE` in the unit; created on first write, flushed on SIGTERM) — on-disk
+entries survive deploys and warm the next boot. It lives outside the code tree on
+purpose: the service runs as `www-data` while the code tree is owned by the deploy
+user, so a state file next to the script would be unwritable. If persistence fails,
+the backend logs a one-time "staying memory-only" warning to the journal and keeps
+working without it.
 
 ### 3A. Apache (current VPS — static + /api/ reverse proxy)
 
