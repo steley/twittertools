@@ -211,6 +211,32 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     return t === 'photo' && b.mediaType === 'video' && (b.media ?? []).some((m) => m.type === 'photo');
   };
 
+  // --- lightbox ---------------------------------------------------------------
+  // Click any media image to enlarge it. The overlay reuses the exact URL the
+  // card is already rendering (img.currentSrc), so it always hits the browser
+  // cache — no re-download. Click anywhere or press Esc to close.
+  const lightbox = el('div', 'fixed inset-0 z-50 hidden cursor-zoom-out items-center justify-center bg-black/85 p-6');
+  const lightImg = document.createElement('img');
+  lightImg.alt = '';
+  lightImg.className = 'max-h-full max-w-full object-contain';
+  lightbox.appendChild(lightImg);
+  const closeLightbox = () => {
+    lightbox.classList.add('hidden');
+    lightbox.classList.remove('flex');
+    lightImg.removeAttribute('src');
+  };
+  const openLightbox = (img: HTMLImageElement) => {
+    if (!img.complete || !img.naturalWidth) return; // nothing rendered yet
+    lightImg.src = img.currentSrc || img.src;
+    lightbox.classList.remove('hidden');
+    lightbox.classList.add('flex');
+  };
+  lightbox.addEventListener('click', closeLightbox);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !lightbox.classList.contains('hidden')) closeLightbox();
+  });
+  document.body.appendChild(lightbox);
+
   // --- filtering ----------------------------------------------------------
   function visible(): BookmarkItem[] {
     const q = query.trim().toLowerCase();
@@ -346,12 +372,20 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
       const setVariants = (img: HTMLImageElement, m: BookmarkMedia, sizes: string, failCls?: string) => {
         img.loading = 'lazy';
         img.decoding = 'async';
+        img.className += ' cursor-zoom-in';
         img.srcset = (['small', 'medium', 'large'] as const)
           .map((n) => `${cdnDisplayUrl(m.url, n)} ${n === 'small' ? '680w' : n === 'medium' ? '1200w' : '2048w'}`)
           .join(', ');
         img.sizes = sizes;
         img.addEventListener('error', () => {
           if (img.src.includes('/api/download')) img.replaceWith(failPlaceholder('Media unavailable', failCls));
+        });
+        // enlarge on click; stopPropagation/preventDefault so a poster inside
+        // its post link enlarges instead of navigating
+        img.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openLightbox(img);
         });
         wireMediaImg(img, cdnDisplayUrl(m.url, 'medium'), 'bookmark-image');
       };
