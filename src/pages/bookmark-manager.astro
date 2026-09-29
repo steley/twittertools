@@ -321,8 +321,25 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     if (item.tags.length) {
       const tagRow = el('div', 'mt-2 flex flex-wrap gap-1');
       for (const tag of item.tags) {
-        const chip = el('span', 'rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500');
-        chip.textContent = '#' + tag;
+        // click a chip to remove the tag (hover turns it red)
+        const chip = el(
+          'button',
+          'rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-500 hover:bg-red-50 hover:text-red-500'
+        );
+        chip.type = 'button';
+        chip.title = 'Remove tag';
+        const label = el('span', '');
+        label.textContent = '#' + tag;
+        const x = el('span', 'ml-0.5 text-slate-400');
+        x.textContent = '×';
+        chip.appendChild(label);
+        chip.appendChild(x);
+        chip.addEventListener('click', async () => {
+          item.tags = item.tags.filter((t) => t !== tag);
+          if (tagFilter === tag) tagFilter = null;
+          await putBookmark(item);
+          render();
+        });
         tagRow.appendChild(chip);
       }
       main.appendChild(tagRow);
@@ -355,7 +372,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
 
     const panel = el('div', 'mt-3 hidden space-y-2');
     const tagInput = el('input', 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-brand focus:outline-none') as HTMLInputElement;
-    tagInput.placeholder = 'Add a tag and press Enter';
+    tagInput.placeholder = 'Add a tag and press Enter — click a #tag to remove it';
     tagInput.value = '';
     tagInput.addEventListener('keydown', async (e) => {
       if (e.key !== 'Enter') return;
