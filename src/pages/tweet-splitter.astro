@@ -29,12 +29,25 @@ const faq = [
 ];
 
 const related = TOOLS.filter((t) => t.slug !== '/tweet-splitter').slice(0, 3);
+
+  const tool = TOOLS.find((t) => t.slug === '/tweet-splitter')!;
+  const toolLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: tool.name,
+    url: 'https://twittertools.com/tweet-splitter/',
+    applicationCategory: 'UtilitiesApplication',
+    operatingSystem: 'Any',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    description: tool.tagline,
+  };
 ---
 
 <Base
   title="Tweet Splitter — Break Long Text into a Numbered Thread | Free"
   description="Paste long text and split it into 280-character posts with 1/ 2/ 3/ numbering. CJK and link aware, cuts at sentences, copy each part. Free, runs in your browser."
   path="/tweet-splitter"
+    jsonLd={[toolLd]}
 >
   <ToolHero
     title="Tweet Splitter"

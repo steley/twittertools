@@ -25,12 +25,25 @@ const faq = [
 ];
 
 const related = TOOLS.filter((t) => t.slug !== '/tweet-character-counter').slice(0, 3);
+
+  const tool = TOOLS.find((t) => t.slug === '/tweet-character-counter')!;
+  const toolLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: tool.name,
+    url: 'https://twittertools.com/tweet-character-counter/',
+    applicationCategory: 'UtilitiesApplication',
+    operatingSystem: 'Any',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    description: tool.tagline,
+  };
 ---
 
 <Base
   title="Free X (Twitter) Character Counter — 280 Limit, Links & Emoji"
   description="Count characters exactly like X (Twitter): 280 limit, CJK and emoji count double, every link counts as 23. Free, instant and private — nothing leaves your browser."
   path="/tweet-character-counter"
+    jsonLd={[toolLd]}
 >
   <ToolHero
     title="X (Twitter) Character Counter"

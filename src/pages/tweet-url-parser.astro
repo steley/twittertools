@@ -25,12 +25,25 @@ const faq = [
 ];
 
 const related = TOOLS.filter((t) => t.slug !== '/tweet-url-parser').slice(0, 3);
+
+  const tool = TOOLS.find((t) => t.slug === '/tweet-url-parser')!;
+  const toolLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: tool.name,
+    url: 'https://twittertools.com/tweet-url-parser/',
+    applicationCategory: 'UtilitiesApplication',
+    operatingSystem: 'Any',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    description: tool.tagline,
+  };
 ---
 
 <Base
   title="Tweet URL & ID Parser — Extract ID, Username and Date | TwitterTools"
   description="Paste an X (Twitter) post URL or ID to extract the tweet ID, username, permalink and exact posting date. Works offline — dates are decoded from the Snowflake ID itself."
   path="/tweet-url-parser"
+    jsonLd={[toolLd]}
 >
   <ToolHero
     title="Tweet URL & ID Parser"

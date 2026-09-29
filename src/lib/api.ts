@@ -150,9 +150,20 @@ export function wireMediaImg(img: HTMLImageElement, mediaUrl: string, filename: 
   };
   img.onerror = swap;
   img.src = mediaUrl;
-  setTimeout(() => {
+  // lazy images far below the fold haven't started loading — a blind swap
+  // here would needlessly pull them through the proxy. Re-check every window
+  // until the image nears the viewport, then give the CDN one last window.
+  const stalled = () => {
+    if (swapped) return;
+    const rect = img.getBoundingClientRect();
+    const near = rect.top < window.innerHeight * 2 && rect.bottom > -window.innerHeight;
+    if (!near) {
+      setTimeout(stalled, timeoutMs);
+      return;
+    }
     if (!img.complete || !img.naturalWidth) swap();
-  }, timeoutMs);
+  };
+  setTimeout(stalled, timeoutMs);
 }
 
 /** Try to save a media file straight from X's CDN via a CORS fetch (fast for

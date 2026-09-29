@@ -25,12 +25,25 @@ const faq = [
 ];
 
 const related = TOOLS.filter((t) => t.slug !== '/twitter-image-downloader').slice(0, 3);
+
+  const tool = TOOLS.find((t) => t.slug === '/twitter-image-downloader')!;
+  const toolLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: tool.name,
+    url: 'https://twittertools.com/twitter-image-downloader/',
+    applicationCategory: 'UtilitiesApplication',
+    operatingSystem: 'Any',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    description: tool.tagline,
+  };
 ---
 
 <Base
   title="X (Twitter) Image Downloader — Save Photos in Original Quality"
   description="Download photos from X (Twitter) posts in full original resolution. Paste a post link, save single images or all of them at once. Free, no sign-up, works on mobile."
   path="/twitter-image-downloader"
+    jsonLd={[toolLd]}
 >
   <ToolHero
     title="X (Twitter) Image Downloader"

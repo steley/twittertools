@@ -46,12 +46,25 @@ const faq = [
 ];
 
 const related = TOOLS.filter((t) => t.slug !== '/twitter-advanced-search-builder').slice(0, 3);
+
+  const tool = TOOLS.find((t) => t.slug === '/twitter-advanced-search-builder')!;
+  const toolLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: tool.name,
+    url: 'https://twittertools.com/twitter-advanced-search-builder/',
+    applicationCategory: 'UtilitiesApplication',
+    operatingSystem: 'Any',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    description: tool.tagline,
+  };
 ---
 
 <Base
   title="X (Twitter) Advanced Search Builder — Free Query Generator"
   description="Build advanced X (Twitter) searches with a simple form: filter by user, date, likes, language and more. Generates search operators like from:, min_faves: and since: automatically."
   path="/twitter-advanced-search-builder"
+    jsonLd={[toolLd]}
 >
   <ToolHero
     title="X Advanced Search Builder"

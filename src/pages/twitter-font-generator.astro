@@ -29,12 +29,25 @@ const faq = [
 ];
 
 const related = TOOLS.filter((t) => t.slug !== '/twitter-font-generator').slice(0, 3);
+
+  const tool = TOOLS.find((t) => t.slug === '/twitter-font-generator')!;
+  const toolLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: tool.name,
+    url: 'https://twittertools.com/twitter-font-generator/',
+    applicationCategory: 'UtilitiesApplication',
+    operatingSystem: 'Any',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    description: tool.tagline,
+  };
 ---
 
 <Base
   title="Twitter Font Generator — Bold, Italic & Styled Text for X | Free"
   description="Turn text into bold, italic, script, Fraktur and other Unicode styles for X (Twitter) posts and bios. Copy with one click, free, runs in your browser."
   path="/twitter-font-generator"
+    jsonLd={[toolLd]}
 >
   <ToolHero
     title="Twitter Font Generator"

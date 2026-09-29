@@ -29,12 +29,25 @@ const faq = [
 ];
 
 const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
+
+  const tool = TOOLS.find((t) => t.slug === '/bookmark-manager')!;
+  const toolLd = {
+    '@context': 'https://schema.org',
+    '@type': 'WebApplication',
+    name: tool.name,
+    url: 'https://twittertools.com/bookmark-manager/',
+    applicationCategory: 'UtilitiesApplication',
+    operatingSystem: 'Any',
+    offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+    description: tool.tagline,
+  };
 ---
 
 <Base
   title="Bookmark Manager — Save X Posts to a Private Local Library | Free"
   description="Collect X (Twitter) posts into a private bookmark library stored in your browser. Add from any tool or by URL, organise with tags and notes, export to JSON or Markdown. Free, no sign-up."
   path="/bookmark-manager"
+    jsonLd={[toolLd]}
 >
   <Fragment slot="head">
     <link rel="manifest" href="/manifest.webmanifest" />
@@ -268,11 +281,22 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
       v.addEventListener('canplay', () => window.clearTimeout(stallTimer), { once: true });
       v.addEventListener('error', () => {
         window.clearTimeout(stallTimer);
+        if (v.src.includes('/api/download')) {
+          // both paths failed — say so instead of leaving a dead player
+          const note = el('div', 'flex h-56 max-w-full items-center justify-center rounded-xl bg-slate-100 px-6 text-center text-sm text-slate-500');
+          note.textContent = "Couldn't load this video on this connection — try again later, or watch it on X.";
+          viewerStage.replaceChildren(note);
+          viewerVideo = null;
+          return;
+        }
         fallbackToProxy();
       });
       v.addEventListener('click', (e) => e.stopPropagation());
       viewerStage.appendChild(v);
       viewerVideo = v;
+      // the viewer opens from a tap — an explicit play() in the same task is
+      // what iOS accepts; the autoplay attribute alone is ignored there
+      v.play().catch(() => {});
     } else {
       const img = document.createElement('img');
       img.alt = '';
