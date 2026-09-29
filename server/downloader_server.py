@@ -272,6 +272,30 @@ def json_error(status: int, message: str) -> web.Response:
     return web.json_response({"error": message}, status=status)
 
 
+def syndication_error_response(status: int) -> web.Response:
+    """Translate an upstream fetch status into an API error the frontend
+    shows verbatim.
+
+    NOTE: never answer HTTP 502 here. The production stack (Apache/Cloudflare)
+    replaces origin 502 bodies with its own terse error page, which would
+    strip the JSON message below — 503 passes through untouched."""
+    if status == 404:
+        return json_error(404, "Post not found — it may be deleted, protected, or the link is wrong.")
+    if status == 403:
+        # syndication answered 200 with an empty object: the post exists but
+        # X withholds its content from logged-out visitors
+        return json_error(
+            403,
+            "X only shows this post to logged-in users — most often because it "
+            "contains sensitive or age-restricted media. A no-sign-up tool can't fetch it.",
+        )
+    if status == 401:
+        return json_error(403, "This post is not available for embedding (likely protected).")
+    if status == 429:
+        return json_error(429, "X is rate-limiting us right now — please retry in a minute.")
+    return json_error(503, "X's embed endpoint didn't respond properly — please try again in a moment.")
+
+
 # --------------------------------------------------------------------------- #
 # Syndication fetching                                                        #
 # --------------------------------------------------------------------------- #
@@ -289,6 +313,11 @@ async def _try_syndication(session: ClientSession, tweet_id: str, token: Optiona
             data = await resp.json(content_type=None)
             if isinstance(data, dict) and (data.get("id_str") or data.get("text")):
                 return 200, data
+            # 200 + empty object = the post exists but X withholds its content
+            # from logged-out visitors (sensitive / age-restricted media);
+            # keep it distinct from a transport failure
+            if isinstance(data, dict) and not data:
+                return 200, {}
             return resp.status, None
     except (ClientError, asyncio.TimeoutError):
         return 599, None
@@ -312,11 +341,14 @@ async def fetch_syndication(session: ClientSession, tweet_id: str) -> Tuple[int,
     for token in order:
         status, data = await _try_syndication(session, tweet_id, token)
         last_status = status
-        if data is not None:
+        if data:  # non-empty tweet payload
             async with _token_mode_lock:
                 _working_token = token
             data = await enrich_note_tweet(session, tweet_id, data)
             return 200, data
+        if status == 200 and data == {}:
+            # login-walled content: definitive, same answer for every token
+            return 403, None
         if status == 404:
             saw_404 = True
         elif status in (401, 403):
@@ -328,7 +360,7 @@ async def fetch_syndication(session: ClientSession, tweet_id: str) -> Tuple[int,
         return 404, None
     if saw_auth:
         return 401, None
-    return (last_status or 502), None
+    return (last_status or 599), None
 
 
 # --------------------------------------------------------------------------- #
@@ -702,7 +734,7 @@ async def api_tweet(request: web.Request) -> web.Response:
                 request.app["client_session"], tweet_id
             )
         except Exception:
-            status, data = 502, None
+            status, data = 599, None
 
         tweet = None
         if data is not None:
@@ -710,7 +742,7 @@ async def api_tweet(request: web.Request) -> web.Response:
                 tweet = normalize_tweet(data)
                 tweet_cache.put(tweet_id, tweet)
             except Exception:
-                status, tweet = 502, None
+                status, tweet = 599, None
         # Resolve waiters first, then free the slot: a request arriving in
         # between still awaits this future instead of re-fetching upstream.
         fut.set_result(("ok", tweet) if tweet is not None else ("error", status))
@@ -724,11 +756,7 @@ async def api_tweet(request: web.Request) -> web.Response:
             return web.json_response({"tweet": payload, "cached": True})
         status = payload
 
-    if status == 404:
-        return json_error(404, "Post not found — it may be deleted, protected, or the link is wrong.")
-    if status in (401, 403):
-        return json_error(403, "This post is not available for embedding (likely protected).")
-    return json_error(502, "Could not fetch the post from X right now. Please try again.")
+    return syndication_error_response(status)
 
 
 async def api_thread(request: web.Request) -> web.Response:
@@ -767,7 +795,8 @@ async def api_thread(request: web.Request) -> web.Response:
         await asyncio.sleep(0.15)  # be polite to the free endpoint
 
     if not tweets:
-        return json_error(404, "Post not found — it may be deleted, protected, or the link is wrong.")
+        # the root post itself failed: report the real cause, not a blanket 404
+        return syndication_error_response(status)
 
     tweets.sort(key=lambda t: int(t["id"] or 0))
     root = tweets[0]
@@ -848,7 +877,7 @@ async def api_download(request: web.Request) -> web.StreamResponse:
             media_url, timeout=timeout, headers={"User-Agent": USER_AGENT}, allow_redirects=False
         ) as upstream:
             if upstream.status != 200:
-                return json_error(502, f"Media fetch failed ({upstream.status}).")
+                return json_error(503, f"Media fetch failed ({upstream.status}).")
             content_type = upstream.headers.get("Content-Type", "application/octet-stream")
             filename = _safe_filename(want_name, media_url, content_type)
             resp = web.StreamResponse(
@@ -884,7 +913,7 @@ async def api_download(request: web.Request) -> web.StreamResponse:
                     await resp.write_eof()
             return resp
     except (ClientError, asyncio.TimeoutError):
-        return json_error(502, "Media fetch failed — upstream connection error.")
+        return json_error(503, "Media fetch failed — upstream connection error.")
 
 
 async def health(request: web.Request) -> web.Response:

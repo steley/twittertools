@@ -103,6 +103,10 @@ FIXTURES = {
     ),
 }
 
+# sensitive / age-restricted post: the mock syndication endpoint answers this
+# ID with HTTP 200 + an empty object (see mock_syndication)
+RESTRICTED_ID = "1212121212121212121"
+
 NOTE_FULL_TEXT = "the full body of the note, with a link https://t.co/ghlink"
 NOTE_URL_ENTITIES = [
     {"url": "https://t.co/ghlink", "expanded_url": "https://github.com/a/b", "indices": [45, 65]}
@@ -115,6 +119,10 @@ async def mock_syndication(request):
     tok = request.query.get("token", "")
     if not tok:  # any token accepted, but one must be sent
         return web.json_response({"detail": "Missing token"}, status=401)
+    if tid == RESTRICTED_ID:
+        # how X serves sensitive / age-restricted posts to logged-out visitors:
+        # HTTP 200 with an empty object
+        return web.json_response({})
     data = FIXTURES.get(tid)
     if data is None:
         return web.json_response({"detail": "No status found"}, status=404)
@@ -313,6 +321,22 @@ def run_checks():
     # 4. 404 tweet -> friendly error
     code, _, body = get("/api/tweet?id=404444444444444444")
     check("404 mapped", code == 404 and "not found" in body.decode().lower(), f"{code} {body[:120]}")
+
+    # 4b. restricted post (200 + empty object upstream) -> explained 403
+    code, _, body = get(f"/api/tweet?id={RESTRICTED_ID}")
+    data = json.loads(body)
+    check(
+        "restricted -> explained 403",
+        code == 403 and "logged-in users" in data.get("error", ""),
+        f"{code} {body[:140]}",
+    )
+    code, _, body = get(f"/api/thread?url=https://x.com/mockuser/status/{RESTRICTED_ID}")
+    data = json.loads(body)
+    check(
+        "restricted thread -> explained 403",
+        code == 403 and "logged-in users" in data.get("error", ""),
+        f"{code} {body[:140]}",
+    )
 
     # 5. download proxy (allowlist overridden to include 127.0.0.1)
     code, headers, body = get("/api/download?url=http://127.0.0.1:8899/video-832.mp4&name=test-video.mp4")
