@@ -35,6 +35,44 @@ jobs:
           cache: pip
           cache-dependency-path: server/requirements.txt
       - run: pip install -r requirements.txt pyflakes
-      - run: python -m pyflakes downloader_server.py mock_test.py dev_mocks.py
-      - name: 16-check offline integration suite (mock syndication + media CDN)
+      - run: python -m pyflakes downloader_server.py mock_test.py dev_mocks.py dev_proxy.py
+      - name: Offline integration suite (mock syndication + media CDN)
         run: python mock_test.py
+
+  smoke:
+    name: Page smoke tests (playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.9'
+      - run: pip install -r server/requirements.txt
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install chromium --with-deps
+      - name: Start local stack (mock endpoints + API + dist proxy)
+        run: |
+          python server/dev_mocks.py > /tmp/mocks.log 2>&1 &
+          TT_SYNDICATION_URL=http://127.0.0.1:8898/tweet-result \
+          TT_MEDIA_HOSTS=127.0.0.1:8899 \
+          TT_CACHE_FILE="" \
+          python server/downloader_server.py > /tmp/api.log 2>&1 &
+          python server/dev_proxy.py > /tmp/proxy.log 2>&1 &
+          for port in 8898 8787 8080; do
+            for i in $(seq 1 30); do
+              curl -s -o /dev/null "http://127.0.0.1:$port/" && break
+              sleep 1
+            done
+          done
+          curl -s http://127.0.0.1:8080/api/healthz
+      - name: Run smoke tests
+        run: node scripts/smoke.mjs
+      - name: Stack logs on failure
+        if: failure()
+        run: |
+          tail -20 /tmp/mocks.log /tmp/api.log /tmp/proxy.log || true

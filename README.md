@@ -37,8 +37,16 @@ sites. No developer account, no OAuth, no per-read billing. It:
   video variants sorted by bitrate,
 - proxies media downloads straight from `pbs.twimg.com` / `video.twimg.com` with
   `Content-Disposition: attachment` — **nothing is stored on disk**,
-- caches responses for 10 min, dedupes concurrent lookups, rate-limits per IP
-  (60 lookups/min, 40 downloads/min).
+- caches responses for 10 min (in memory **and** on disk next to the script, so a
+  restart doesn't aim the full request flood at the upstream; `TT_CACHE_FILE=""`
+  disables persistence),
+- dedupes concurrent lookups, rate-limits per IP (60 lookups/min, 40 downloads/min)
+  **and** globally (300 lookups/min, 120 downloads/min —
+  `TT_GLOBAL_TWEET_RATE` / `TT_GLOBAL_DOWNLOAD_RATE`, format `limit/window`),
+- never answers HTTP 502: Cloudflare replaces origin 502 bodies with its own terse
+  error page, so upstream failures map to 503 (passes through) with specific messages;
+  `GET /api/healthz` exposes aggregate counters (response statuses, upstream status
+  distribution + latency, cache hits) — no user data.
 
 Honest limitations (also stated in the UI):
 
@@ -53,7 +61,9 @@ Honest limitations (also stated in the UI):
 
 CI (`.github/workflows/ci.yml`) runs the same checks on every push:
 `astro check` + production build for the frontend, pyflakes + the offline
-integration suite for the backend.
+integration suite for the backend, and Playwright page smoke tests (every
+page renders and one signature interaction per tool, against the mock stack
+— catches runtime crashes that `astro check` cannot see).
 
 ```bash
 npm install
@@ -127,7 +137,12 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp twittertools-api.service /etc/systemd/system/   # paths inside match this layout
 systemctl daemon-reload && systemctl enable --now twittertools-api
 curl http://127.0.0.1:8787/health          # -> ok
+curl http://127.0.0.1:8787/api/healthz     # -> aggregate stats (uptime, statuses, cache)
 ```
+
+The tweet cache persists to `server/tweet_cache.json` (created on first write;
+`TT_CACHE_FILE` moves or disables it). SIGTERM (a systemd restart) flushes it —
+the on-disk entries survive deploys and warm the next boot.
 
 ### 3A. Apache (current VPS — static + /api/ reverse proxy)
 

@@ -247,6 +247,8 @@ def run_downloader():
         TT_GRAPHQL_BASE="http://127.0.0.1:8898/graphql",
         # exercise the conversation down-walk (default-off in production)
         TT_THREAD_DOWNWALK="1",
+        # keep the integration suite hermetic: no cache file in the repo
+        TT_CACHE_FILE="",
     )
     proc = subprocess.Popen([sys.executable, "downloader_server.py"], env=env)
     return proc
@@ -365,6 +367,36 @@ def run_checks():
     )
     check("t.co expansion", txt == "look https://github.com/a/b and", repr(txt))
     check("expansion no-op safe", ds.expand_text_urls("plain text", [], []) == "plain text")
+
+    # 9b. disk persistence: put -> flush -> a fresh instance reloads it
+    import os as _os
+    import tempfile
+
+    from pathlib import Path as _Path
+
+    tmpf = _Path(tempfile.mkdtemp()) / "cache.json"
+    c1 = ds.TtlCache(ttl=60.0, maxsize=4, persist_path=tmpf)
+    c1.put("tweet-a", {"text": "hello"})
+    c1.put("tweet-b", {"text": "world"})
+    c1.flush()
+    check("disk cache file written", tmpf.is_file())
+    c2 = ds.TtlCache(ttl=60.0, maxsize=4, persist_path=tmpf)
+    check(
+        "disk cache reload",
+        c2.get("tweet-a") == {"text": "hello"} and c2.get("tweet-b") == {"text": "world"},
+    )
+    c3 = ds.TtlCache(ttl=0.001, maxsize=4, persist_path=tmpf)
+    time.sleep(0.02)
+    check("disk cache ttl expiry on reload", c3.get("tweet-a") is None)
+
+    # 9c. global brake + env-parsed rate tuples
+    brake = ds.SlidingWindowLimiter(2, 60)
+    check("global brake trips", brake.allow("g") and brake.allow("g") and not brake.allow("g"))
+    _os.environ["TT_TEST_RATE"] = "7/30"
+    check("rate env parse", ds._rate_env("TT_TEST_RATE", (1, 1)) == (7, 30))
+    _os.environ["TT_TEST_RATE"] = "junk"
+    check("rate env fallback", ds._rate_env("TT_TEST_RATE", (1, 1)) == (1, 1))
+    del _os.environ["TT_TEST_RATE"]
 
     # 10. rate limiting keys on the real client IP (60 req / 60 s)
     rl_ip = "203.0.113.77"

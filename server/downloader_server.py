@@ -42,6 +42,7 @@ import re
 import time
 from contextlib import suppress
 from collections import OrderedDict, defaultdict, deque
+from pathlib import Path
 from typing import Any, Deque, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
@@ -143,6 +144,21 @@ SYNDICATION_TIMEOUT = ClientTimeout(total=10)
 
 TWEET_RATE = (60, 60)          # 60 requests / 60 s per IP
 DOWNLOAD_RATE = (40, 60)       # 40 downloads / 60 s per IP
+# brake for the whole service, all IPs combined: a public no-login endpoint
+# needs a ceiling a single abusive client (or a bot swarm) cannot outgrow
+GLOBAL_TWEET_RATE = (300, 60)      # ~5 concurrent users at full per-IP allowance
+GLOBAL_DOWNLOAD_RATE = (120, 60)
+
+
+def _rate_env(name: str, default: Tuple[int, int]) -> Tuple[int, int]:
+    raw = os.environ.get(name)  # "limit/window", e.g. TT_GLOBAL_TWEET_RATE=500/60
+    if not raw:
+        return default
+    limit, _, window = raw.partition("/")
+    try:
+        return (int(limit), int(window or 60))
+    except ValueError:
+        return default
 
 # --------------------------------------------------------------------------- #
 # Token computation (react-tweet style). JS:                                  #
@@ -203,30 +219,84 @@ def candidate_tokens(tweet_id: str) -> List[str]:
 # --------------------------------------------------------------------------- #
 
 class TtlCache:
-    def __init__(self, ttl: float, maxsize: int):
+    """TTL cache with optional disk persistence: on startup the previous
+    process's entries are reloaded, so a restart (deploy, crash, host
+    reboot) doesn't aim the full request flood at the free upstream."""
+
+    def __init__(self, ttl: float, maxsize: int, persist_path: Optional[Path] = None):
         self.ttl = ttl
         self.maxsize = maxsize
+        self._persist_path = persist_path
+        self._dirty = False
+        self._save_task: Optional["asyncio.Task"] = None
         self._data: "OrderedDict[str, Tuple[float, Any]]" = OrderedDict()
+        # wall-clock stamps on purpose: monotonic readings cannot survive a
+        # restart, persisted entries must age against the real clock
+        if self._persist_path is not None:
+            self._load()
 
     def get(self, key: str) -> Optional[Any]:
         item = self._data.get(key)
         if not item:
             return None
         ts, value = item
-        if time.monotonic() - ts > self.ttl:
+        if time.time() - ts > self.ttl:
             self._data.pop(key, None)
             return None
         self._data.move_to_end(key)
         return value
 
     def put(self, key: str, value: Any) -> None:
-        self._data[key] = (time.monotonic(), value)
+        self._data[key] = (time.time(), value)
         self._data.move_to_end(key)
         while len(self._data) > self.maxsize:
             self._data.popitem(last=False)
+        if self._persist_path is not None:
+            self._dirty = True
+            self._schedule_save()
 
     def __len__(self) -> int:
         return len(self._data)
+
+    def flush(self) -> None:
+        """Write pending entries to disk (best effort, atomic via tmp+rename).
+        Unwritable location = silently memory-only."""
+        if self._persist_path is None or not self._dirty:
+            return
+        tmp = self._persist_path.with_suffix(".json.tmp")
+        try:
+            entries = {key: [ts, value] for key, (ts, value) in self._data.items()}
+            tmp.write_text(json.dumps({"version": 1, "entries": entries}))
+            tmp.replace(self._persist_path)
+            self._dirty = False
+        except (OSError, TypeError, ValueError):
+            pass
+
+    def _schedule_save(self) -> None:
+        if self._save_task is not None and not self._save_task.done():
+            return  # a deferred save is pending and will see the latest state
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self.flush()
+            return
+        self._save_task = loop.create_task(self._deferred_save())
+
+    async def _deferred_save(self) -> None:
+        await asyncio.sleep(2)  # coalesce bursts of puts into one write
+        self.flush()
+
+    def _load(self) -> None:
+        try:
+            raw = json.loads(self._persist_path.read_text())
+            now = time.time()
+            items = sorted(raw.get("entries", {}).items(), key=lambda kv: kv[1][0], reverse=True)
+            for key, item in items[: self.maxsize]:
+                ts, value = item
+                if now - ts <= self.ttl and isinstance(value, dict):
+                    self._data[key] = (ts, value)
+        except (OSError, ValueError, TypeError, AttributeError):
+            pass  # missing or corrupt file: start empty
 
 
 class SlidingWindowLimiter:
@@ -248,9 +318,20 @@ class SlidingWindowLimiter:
         return True
 
 
-tweet_cache = TtlCache(TWEET_CACHE_TTL, TWEET_CACHE_SIZE)
+def _cache_path() -> Optional[Path]:
+    """TT_CACHE_FILE="" disables persistence; unset defaults to a file next
+    to this script (survives restarts, dies with the working tree)."""
+    raw = os.environ.get("TT_CACHE_FILE")
+    if raw is None:
+        return Path(__file__).with_name("tweet_cache.json")
+    return Path(raw) if raw else None
+
+
+tweet_cache = TtlCache(TWEET_CACHE_TTL, TWEET_CACHE_SIZE, persist_path=_cache_path())
 tweet_limiter = SlidingWindowLimiter(*TWEET_RATE)
 download_limiter = SlidingWindowLimiter(*DOWNLOAD_RATE)
+global_tweet_limiter = SlidingWindowLimiter(*_rate_env("TT_GLOBAL_TWEET_RATE", GLOBAL_TWEET_RATE))
+global_download_limiter = SlidingWindowLimiter(*_rate_env("TT_GLOBAL_DOWNLOAD_RATE", GLOBAL_DOWNLOAD_RATE))
 inflight: Dict[str, asyncio.Future] = {}
 
 
@@ -764,7 +845,7 @@ def parse_tweet_id(raw: str) -> Optional[str]:
 # --------------------------------------------------------------------------- #
 
 async def api_tweet(request: web.Request) -> web.Response:
-    if not tweet_limiter.allow(client_ip(request)):
+    if not global_tweet_limiter.allow("global") or not tweet_limiter.allow(client_ip(request)):
         return json_error(429, "Too many requests, please slow down.")
 
     tweet_id = parse_tweet_id(request.query.get("id") or request.query.get("url") or "")
@@ -811,7 +892,7 @@ async def api_tweet(request: web.Request) -> web.Response:
 
 
 async def api_thread(request: web.Request) -> web.Response:
-    if not tweet_limiter.allow(client_ip(request)):
+    if not global_tweet_limiter.allow("global") or not tweet_limiter.allow(client_ip(request)):
         return json_error(429, "Too many requests, please slow down.")
 
     tweet_id = parse_tweet_id(request.query.get("url") or request.query.get("id") or "")
@@ -907,7 +988,7 @@ def _safe_filename(name: str, url: str, content_type: str) -> str:
 
 
 async def api_download(request: web.Request) -> web.StreamResponse:
-    if not download_limiter.allow(client_ip(request)):
+    if not global_download_limiter.allow("global") or not download_limiter.allow(client_ip(request)):
         return json_error(429, "Too many downloads, please slow down.")
 
     media_url = (request.query.get("url") or "").strip()
@@ -1057,6 +1138,7 @@ def create_app() -> web.Application:
 
 
 async def on_cleanup(app: web.Application) -> None:
+    tweet_cache.flush()
     await app["client_session"].close()
 
 
@@ -1065,6 +1147,14 @@ def main() -> None:
     app.on_cleanup.append(on_cleanup)
     port = int(os.environ.get("PORT", "8787"))
     bind = os.environ.get("BIND", "127.0.0.1")
+    # systemd restarts arrive as SIGTERM; route it through run_app's graceful
+    # path so on_cleanup (cache flush) runs instead of losing the last entries
+    import signal
+
+    def _terminate(signum, frame):
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, _terminate)
     print(f"TwitterTools API listening on http://{bind}:{port}")
     web.run_app(app, host=bind, port=port, print=None)
 
