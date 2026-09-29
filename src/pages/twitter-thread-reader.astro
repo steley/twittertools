@@ -8,7 +8,7 @@ import { TOOLS } from '../lib/tools';
 const faq = [
   {
     q: 'How does the thread reader work?',
-    a: 'TwitterTools follows the reply chain backwards from the post you paste — so the thread\'s last post unrolls the whole thing. X no longer lets unauthenticated tools list a post\'s replies, so the reader can\'t walk forwards from the first post; if that\'s the link you have, copy the thread text and use the Paste mode instead — all reading and export features still work.',
+    a: 'TwitterTools follows the reply chain backwards from the post you paste — so the thread\'s last post unrolls the whole thing. X no longer lets unauthenticated tools list a post\'s replies, so the reader can\'t walk forwards from the first post; if that\'s the link you have, copy the thread\'s text — or its post links, one per line — and use the Paste mode instead — all reading and export features still work.',
   },
   {
     q: 'Can I export a thread as Markdown?',
@@ -83,14 +83,16 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
 
     <div id="tr-panel-paste" class="mt-5 hidden">
       <label for="tr-text" class="mb-2 block text-sm font-medium text-slate-700">
-        Thread text — separate posts with <code class="rounded bg-slate-100 px-1">---</code> on its own line (or lines like <code class="rounded bg-slate-100 px-1">1/</code>)
+        Thread text — separate posts with <code class="rounded bg-slate-100 px-1">---</code> on its
+        own line (or lines like <code class="rounded bg-slate-100 px-1">1/</code>). A list of post
+        links, one per line, works too — they're fetched in that order, duplicates removed.
       </label>
       <textarea
         id="tr-text"
-          aria-label="Thread text"
+          aria-label="Thread text or post links"
         rows="8"
         class="w-full rounded-xl border border-slate-300 p-4 font-mono text-sm leading-relaxed focus:border-brand focus:outline-none"
-        placeholder={'First post of my thread...\n---\nSecond post, more detail...\n---\nWrapping up!'}
+        placeholder={'Post links, one per line:\nhttps://x.com/who/status/1234…\nhttps://x.com/who/status/5678…\n\n— or thread text with --- lines between posts'}
       ></textarea>
       <button
         id="tr-parse"
@@ -212,7 +214,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
 </Base>
 
 <script>
-  import { extractTweetId, fetchThread, wireMediaImg, type TweetData } from '../lib/api';
+  import { extractTweetId, fetchThread, fetchTweet, wireMediaImg, type TweetData } from '../lib/api';
   import { bookmarkToggleButton, type BookmarkItem } from '../lib/bookmark-store';
 
   const tabUrl = document.getElementById('tr-tab-url') as HTMLButtonElement;
@@ -305,6 +307,49 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     render();
   });
 
+  /** Pointer-based row reordering: press the ⠿ handle and drag — rows swap
+   * live (DOM and the thread array move together); the render() on release
+   * renumbers the 1/N markers. Works for mouse and touch (touch-action:none
+   * keeps the page from scrolling while dragging from the handle). */
+  function wireDrag(handle: HTMLElement, row: HTMLElement) {
+    handle.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      const rows = Array.from(tweetsEl.querySelectorAll<HTMLElement>(':scope > article'));
+      let cur = rows.indexOf(row);
+      if (cur < 0) return;
+      try {
+        row.setPointerCapture(e.pointerId);
+      } catch {
+        /* non-capturing pointers still bubble to window */
+      }
+      row.classList.add('opacity-60');
+      document.body.style.cursor = 'grabbing';
+      const onMove = (ev: PointerEvent) => {
+        for (let j = 0; j < rows.length; j++) {
+          if (j === cur) continue;
+          const b = rows[j].getBoundingClientRect();
+          const mid = b.top + b.height / 2;
+          if ((j < cur && ev.clientY < mid) || (j > cur && ev.clientY > mid)) {
+            tweetsEl.insertBefore(row, j < cur ? rows[j] : rows[j].nextSibling);
+            [thread[cur], thread[j]] = [thread[j], thread[cur]];
+            [rows[cur], rows[j]] = [rows[j], rows[cur]];
+            cur = j;
+            break;
+          }
+        }
+      };
+      const onUp = () => {
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onUp);
+        row.classList.remove('opacity-60');
+        document.body.style.cursor = '';
+        render();
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
+  }
+
   function render() {
     tweetsEl.replaceChildren();
     if (!thread.length) {
@@ -364,6 +409,17 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       const row = el('article', 'flex gap-3');
       let marker: HTMLElement | null = null;
       if (multi) {
+        // drag handle first, then the 1/N marker
+        const handle = el(
+          'span',
+          '-ml-1 w-4 shrink-0 cursor-grab select-none self-stretch text-base leading-none text-slate-300 hover:text-slate-500 active:cursor-grabbing'
+        );
+        handle.textContent = '⠿';
+        handle.style.touchAction = 'none';
+        handle.setAttribute('aria-hidden', 'true');
+        handle.title = 'Drag to reorder';
+        row.appendChild(handle);
+        wireDrag(handle, row);
         marker = el(
           'span',
           'w-10 shrink-0 pt-[3px] text-right text-[11px] tabular-nums text-slate-400'
@@ -482,6 +538,60 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     singleHint.classList.add('hidden');
   }
 
+  // --- shared adoption: fetched posts -> rendered thread + save button -------
+  function toSimple(t: TweetData): SimpleTweet {
+    return {
+      text: t.text,
+      author: t.user?.name,
+      handle: t.user?.screenName,
+      date: t.createdAt?.slice(0, 10),
+      avatar: t.user?.avatar,
+      url: t.url,
+      article: t.article,
+      sel: true,
+      images: t.media
+        .filter((m) => m.type === 'photo')
+        .map((m) => ({ src: m.url, w: m.width, h: m.height })),
+      media: t.media
+        .filter((m) => m.type === 'video' || m.type === 'animated_gif')
+        .map((m) => ({
+          poster: m.url,
+          label: m.type === 'animated_gif' ? 'GIF' : 'Video',
+          postUrl: t.url,
+        })),
+    };
+  }
+
+  function adoptTweets(tweets: TweetData[]) {
+    thread = tweets.map(toSimple);
+    const first = tweets[0];
+    threadTitle = first?.article
+      ? (first.text.split('\n')[0] ?? 'Article')
+      : first?.user?.screenName
+        ? `Thread by ${first.user.name} (@${first.user.screenName})`
+        : 'Thread';
+    render();
+    // one-click "save the whole thread" into the local bookmark library
+    if (first) {
+      const snapshot: BookmarkItem = {
+        id: first.id,
+        url: first.url,
+        author: first.user?.name ?? '',
+        handle: first.user?.screenName ?? '',
+        text: tweets.map((p) => p.text).join('\n\n'),
+        mediaType: first.article ? 'article' : 'thread',
+        posts: tweets.map((p) => p.text),
+        thumb: firstPostThumb(tweets),
+        savedAt: Date.now(),
+        tags: [],
+        note: `${tweets.length} post${tweets.length > 1 ? 's' : ''}`,
+      };
+      threadSaveBtn?.remove();
+      threadSaveBtn = bookmarkToggleButton(snapshot);
+      actions.prepend(threadSaveBtn);
+    }
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     hideMessages();
@@ -494,52 +604,7 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
     btn.textContent = 'Unrolling…';
     try {
       const data = await fetchThread(id);
-      thread = data.tweets.map((t: TweetData) => ({
-        text: t.text,
-        author: t.user?.name,
-        handle: t.user?.screenName,
-        date: t.createdAt?.slice(0, 10),
-        avatar: t.user?.avatar,
-        url: t.url,
-        article: t.article,
-        sel: true,
-        images: t.media
-          .filter((m) => m.type === 'photo')
-          .map((m) => ({ src: m.url, w: m.width, h: m.height })),
-        media: t.media
-          .filter((m) => m.type === 'video' || m.type === 'animated_gif')
-          .map((m) => ({
-            poster: m.url,
-            label: m.type === 'animated_gif' ? 'GIF' : 'Video',
-            postUrl: t.url,
-          })),
-      }));
-      const first = data.tweets[0];
-      threadTitle = first?.article
-        ? (first.text.split('\n')[0] ?? 'Article')
-        : first?.user?.screenName
-          ? `Thread by ${first.user.name} (@${first.user.screenName})`
-          : 'Thread';
-      render();
-      // one-click "save the whole thread" into the local bookmark library
-      if (first) {
-        const snapshot: BookmarkItem = {
-          id: first.id,
-          url: first.url,
-          author: first.user?.name ?? '',
-          handle: first.user?.screenName ?? '',
-          text: data.tweets.map((p) => p.text).join('\n\n'),
-          mediaType: first.article ? 'article' : 'thread',
-          posts: data.tweets.map((p) => p.text),
-          thumb: firstPostThumb(data.tweets),
-          savedAt: Date.now(),
-          tags: [],
-          note: `${data.tweets.length} post${data.tweets.length > 1 ? 's' : ''}`,
-        };
-        threadSaveBtn?.remove();
-        threadSaveBtn = bookmarkToggleButton(snapshot);
-        actions.prepend(threadSaveBtn);
-      }
+      adoptTweets(data.tweets);
       if (data.partial && data.tweets.length <= 1) {
         partialBox.textContent =
           "Couldn't follow the reply chain for this post (X's embed endpoint doesn't expose it). Copy the thread text and use the Paste mode instead — all exports still work.";
@@ -553,8 +618,9 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
               : 'Partially unrolled: some posts in the chain were unavailable (deleted or protected).';
         partialBox.classList.remove('hidden');
       } else if (data.tweets.length === 1) {
-        singleHint.innerHTML = first?.article
-          ? SINGLE_HINT_ARTICLE.replace('ARTICLE_URL', (first.url ?? 'https://x.com').replace(/"/g, '%22'))
+        const solo = data.tweets[0];
+        singleHint.innerHTML = solo?.article
+          ? SINGLE_HINT_ARTICLE.replace('ARTICLE_URL', (solo.url ?? 'https://x.com').replace(/"/g, '%22'))
           : SINGLE_HINT_DEFAULT;
         singleHint.classList.remove('hidden');
       }
@@ -588,12 +654,73 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-thread-reader').slice(0
       .map((p) => ({ text: p, sel: true }));
   }
 
+  /** A paste of post links (one per line; --- separator lines are ignored)
+   * rather than thread text? True only when EVERY non-empty line contains a
+   * status link — otherwise the input is thread text. Duplicate links
+   * collapse to one. */
+  function parseUrlList(): string[] | null {
+    const lines = textarea.value
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !/^-{3,}$/.test(l));
+    if (!lines.length) return null;
+    const ids: string[] = [];
+    for (const line of lines) {
+      const id = extractTweetId(line);
+      if (!id) return null;
+      if (!ids.includes(id)) ids.push(id);
+    }
+    return ids;
+  }
+
+  /** Fetch pasted post links one by one (polite pacing keeps us under the
+   * API rate limit) and adopt them as a thread, in the pasted order. */
+  async function fetchUrlList(ids: string[]) {
+    const batch = ids.slice(0, 50);
+    const raw: TweetData[] = [];
+    let failed = 0;
+    pasteBtn.disabled = true;
+    try {
+      for (let i = 0; i < batch.length; i++) {
+        pasteBtn.textContent = `Fetching ${i + 1}/${batch.length}…`;
+        try {
+          raw.push(await fetchTweet(batch[i]));
+        } catch {
+          failed++;
+        }
+        if (i < batch.length - 1) await new Promise((r) => setTimeout(r, 1100));
+      }
+    } finally {
+      pasteBtn.disabled = false;
+      pasteBtn.textContent = 'Read thread';
+    }
+    if (!raw.length) {
+      showError("Couldn't fetch any of those posts — check the links or try again in a minute.");
+      return;
+    }
+    adoptTweets(raw);
+    const notes: string[] = [];
+    if (ids.length > 50) notes.push('Only the first 50 links were read.');
+    if (failed)
+      notes.push(`Fetched ${raw.length} of ${batch.length} posts — the rest failed (deleted, restricted, or X's endpoint hiccupped).`);
+    if (notes.length) {
+      partialBox.textContent = notes.join(' ') + ' Drag posts to reorder, then export.';
+      partialBox.classList.remove('hidden');
+    }
+  }
+
   pasteBtn.addEventListener('click', () => {
     hideMessages();
+    const ids = parseUrlList();
+    if (ids) {
+      void fetchUrlList(ids);
+      return;
+    }
     thread = parsePasted();
     threadTitle = 'Thread';
     render();
-    if (!thread.length) showError('Paste the thread text first (separate posts with --- lines).');
+    if (!thread.length)
+      showError('Paste the thread text first (separate posts with --- lines), or paste post links, one per line.');
   });
 
   // --- exports ------------------------------------------------------------------
