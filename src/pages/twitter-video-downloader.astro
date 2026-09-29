@@ -15,6 +15,10 @@ const faq = [
     a: 'Yes. GIFs on X are actually short muted MP4 videos, so the downloader saves them as an MP4 file that plays everywhere.',
   },
   {
+    q: 'How accurate is the file size shown for each quality?',
+    a: 'The size is calculated from each variant\'s bitrate and the video\'s length, so it lands within a few percent of the real file — that\'s why it\'s prefixed with ~. The exact size depends on how X encoded the video.',
+  },
+  {
     q: 'Does it work on iPhone and Android?',
     a: 'Yes — the site works in any modern mobile browser. On iOS, downloads land in your Files app; on Android, in your Downloads folder.',
   },
@@ -142,6 +146,16 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-video-downloader').slic
     return '~320p';
   };
 
+  // file size derived from the variant's bitrate and the video's length —
+  // close but not exact, so it's prefixed with ~
+  const sizeLabel = (bitrate: number | null, durationMs?: number | null): string => {
+    if (bitrate == null || !durationMs) return '';
+    const bytes = ((bitrate / 8) * durationMs) / 1000;
+    if (bytes >= 1e9) return ` · ~${(bytes / 1e9).toFixed(2)} GB`;
+    const mb = bytes / 1e6;
+    return ` · ~${mb >= 100 ? Math.round(mb) : mb.toFixed(1)} MB`;
+  };
+
   function mediaCard(item: MediaItem): HTMLElement {
     const card = el('div', 'rounded-xl border border-slate-200 overflow-hidden');
     const thumbWrap = el('div', 'relative bg-slate-100');
@@ -172,7 +186,9 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-video-downloader').slic
       const q = el('p', 'text-sm font-semibold');
       q.textContent = qualityLabel(v.bitrate);
       const sub = el('p', 'text-xs text-slate-400');
-      sub.textContent = v.bitrate ? `${Math.round(v.bitrate / 1000)} kbps · MP4` : 'MP4';
+      sub.textContent = v.bitrate
+        ? `${Math.round(v.bitrate / 1000)} kbps · MP4${sizeLabel(v.bitrate, item.durationMs)}`
+        : 'MP4';
       meta.appendChild(q);
       meta.appendChild(sub);
       row.appendChild(meta);

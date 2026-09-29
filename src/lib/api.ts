@@ -19,6 +19,8 @@ export interface MediaItem {
   /** Width/height when known */
   width?: number;
   height?: number;
+  /** Video/GIF length in milliseconds (for deriving variant file sizes) */
+  durationMs?: number | null;
   /** Video/GIF variants (mp4 + m3u8) */
   variants?: MediaVariant[];
 }

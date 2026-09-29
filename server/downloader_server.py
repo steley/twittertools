@@ -578,9 +578,11 @@ def normalize_variant(v: dict) -> dict:
 
 def normalize_media(m: dict) -> dict:
     mtype = m.get("type", "photo")
+    duration_ms = None
     variants = []
     if mtype in ("video", "animated_gif"):
         info = m.get("video_info") or {}
+        duration_ms = info.get("duration_millis")
         # Only MP4 variants are downloadable for users; drop m3u8 playlists.
         variants = [
             normalize_variant(v)
@@ -595,6 +597,9 @@ def normalize_media(m: dict) -> dict:
         "url": m.get("media_url_https", ""),
         "width": orig.get("w"),
         "height": orig.get("h"),
+        # duration lets the frontend derive each variant's file size
+        # (bitrate × duration) without probing the CDN
+        "durationMs": duration_ms,
         "variants": variants,
     }
 
