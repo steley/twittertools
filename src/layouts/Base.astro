@@ -53,8 +53,8 @@ const siteLd = {
     <meta name="twitter:title" content={title} />
     <meta name="twitter:description" content={description} />
     <meta name="twitter:image" content="https://twittertools.com/og.png" />
-    <script type="application/ld+json" set:html={JSON.stringify(siteLd)} />
-    {jsonLd.map((obj) => <script type="application/ld+json" set:html={JSON.stringify(obj)} />)}
+    <script type="application/ld+json" set:html={JSON.stringify(siteLd).replace(/</g, '\u003c')} />
+    {jsonLd.map((obj) => <script type="application/ld+json" set:html={JSON.stringify(obj).replace(/</g, '\u003c')} />)}
     <slot name="head" />
     {
       cfToken && (

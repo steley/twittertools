@@ -138,7 +138,7 @@ GRAPHQL_FEATURES = {
     "responsive_web_graphql_timeline_navigation_enabled": True,
     "responsive_web_enhance_cards_enabled": False,
 }
-TWEET_ID_RE = re.compile(r"(?:x|twitter)\.com/(?:[A-Za-z0-9_]{1,15}/status(?:es)?/)?(\d{5,25})", re.I)
+TWEET_ID_RE = re.compile(r"(?:x|twitter)\.com/(?:[A-Za-z0-9_]{1,15}/)?(?:web/)?status(?:es)?/(\d{5,25})", re.I)
 BARE_ID_RE = re.compile(r"^\d{5,25}$")
 TWEET_CACHE_TTL = 600          # seconds
 TWEET_CACHE_SIZE = 500
@@ -183,25 +183,60 @@ def _int_to_base36(n: int) -> str:
     return "".join(reversed(digits))
 
 
+def _next_double(x: float) -> float:
+    """The smallest double greater than x (positive x, not inf)."""
+    import struct
+    (bits,) = struct.unpack("<Q", struct.pack("<d", x))
+    return struct.unpack("<d", struct.pack("<Q", bits + 1))[0]
+
+
 def _js_number_to_base36(x: float) -> str:
-    """Mimic JS Number.prototype.toString(36) closely enough for token math."""
-    neg = x < 0 or (x == 0 and math.copysign(1, x) < 0)
-    x = abs(x)
-    int_part = int(x)
-    s = _int_to_base36(int_part)
-    frac = x - int_part
-    if frac > 0:
-        digits = []
-        for _ in range(24):
-            frac *= 36
-            d = int(frac)
-            if d > 35:
-                d = 35
-            digits.append(BASE36_CHARS[d])
-            frac -= d
-            if frac <= 0:
-                break
-        s += "." + "".join(digits)
+    """Faithful port of V8's DoubleToRadixCString (radix 36) — the engine behind
+    Number.prototype.toString(36), i.e. react-tweet's token math. Long division
+    is NOT equivalent: V8 emits digits until the remainder drops below half an
+    ulp (scaled), with a round-to-even in-place carry when the remainder sits
+    closer to the next digit."""
+    neg = x < 0
+    if neg:
+        x = -x
+    integer = math.floor(x)
+    fraction = x - integer
+    frac_chars: List[str] = []
+    carry = False
+    if fraction > 0.0:
+        delta = 0.5 * (_next_double(x) - x)
+        min_delta = _next_double(0.0)  # smallest positive double
+        if delta < min_delta:
+            delta = min_delta
+        if fraction >= delta:
+            while True:
+                fraction *= 36.0
+                delta *= 36.0
+                digit = int(fraction)
+                frac_chars.append(BASE36_CHARS[digit])
+                fraction -= digit
+                # Round to even.
+                if fraction > 0.5 or (fraction == 0.5 and (digit & 1)):
+                    if fraction + delta > 1.0:
+                        # carry-over: increment the last written digit; digits
+                        # that wrap (were 'z') are dropped as the carry walks left
+                        while frac_chars:
+                            c = frac_chars.pop()
+                            digit = BASE36_CHARS.index(c)
+                            if digit + 1 < 36:
+                                frac_chars.append(BASE36_CHARS[digit + 1])
+                                break
+                            # wrapped past 'z': drop and keep carrying
+                        else:
+                            carry = True  # every digit carried: integer += 1
+                        break
+                if fraction < delta:
+                    break
+    if carry:
+        integer += 1
+    s = _int_to_base36(integer)
+    if frac_chars:
+        s += "." + "".join(frac_chars)
     return ("-" if neg else "") + s
 
 
@@ -927,18 +962,18 @@ async def api_thread(request: web.Request) -> web.Response:
         seen.add(current)
 
         status, data = await fetch_syndication(session, current)
+        tweet = None
         if data is not None:
             try:
                 tweet = normalize_tweet(data)
             except Exception:  # malformed upstream payload — same as a failed fetch
                 status, data = 599, None
-        if data is None:
+        if data is None or tweet is None:
             if tweets:
                 partial = True
                 reason = f"chain_interrupted_{status}"
             break
 
-        tweet = normalize_tweet(data)
         tweets.append(tweet)
         parent = tweet.get("replyToId")
         if not parent:

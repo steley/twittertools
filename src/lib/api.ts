@@ -217,6 +217,7 @@ export function wireMediaImg(img: HTMLImageElement, mediaUrl: string, filename: 
   // until the image nears the viewport, then give the CDN one last window.
   const stalled = () => {
     if (swapped || (img.complete && img.naturalWidth)) return; // done either way
+    if (!img.isConnected) return; // removed from the page: no display, no verdict
     const rect = img.getBoundingClientRect();
     const near = rect.top < window.innerHeight * 2 && rect.bottom > -window.innerHeight;
     if (!near) {

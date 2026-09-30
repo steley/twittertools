@@ -24,7 +24,8 @@ Ten free, no-login tools:
 │                       snowflake, tool registry
 ├── server/             downloader_server.py (aiohttp) + systemd unit + mock/dev tooling
 ├── deploy/             Apache vhost + nginx config (alternative)
-├── scripts/            gen_og.py (social card), gen_pwa_icons.py, smoke.mjs (page tests)
+├── scripts/            gen_og.py (social card), gen_favicons.py, gen_pwa_icons.py,
+│                       smoke.mjs (page tests)
 └── public/             robots.txt, favicon.svg, og.png, manifest.webmanifest, icons/, bookmark-manager/sw.js
 ```
 
