@@ -918,22 +918,29 @@ async def api_tweet(request: web.Request) -> web.Response:
 
     fut = inflight.get(tweet_id)
     if fut is None:
-        fut = asyncio.get_event_loop().create_future()
+        fut = asyncio.get_running_loop().create_future()
         inflight[tweet_id] = fut
         try:
             status, data = await fetch_syndication(
                 request.app["client_session"], tweet_id
             )
-        except Exception:
-            status, data = 599, None
-
-        tweet = None
-        if data is not None:
-            try:
-                tweet = normalize_tweet(data)
-                tweet_cache.put(tweet_id, tweet)
-            except Exception:
-                status, tweet = 599, None
+            tweet = None
+            if data is not None:
+                try:
+                    tweet = normalize_tweet(data)
+                    tweet_cache.put(tweet_id, tweet)
+                except Exception:
+                    status, tweet = 599, None
+        except BaseException:
+            # cancelled (shutdown, client disconnect with handler
+            # cancellation enabled): fail the waiters fast and never leave
+            # a pending future behind — it would poison this tweet id until
+            # the next restart. CancelledError is a BaseException, so this
+            # arm must not be `except Exception`.
+            if not fut.done():
+                fut.set_result(("error", 599))
+            inflight.pop(tweet_id, None)
+            raise
         # Resolve waiters first, then free the slot: a request arriving in
         # between still awaits this future instead of re-fetching upstream.
         fut.set_result(("ok", tweet) if tweet is not None else ("error", status))

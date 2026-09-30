@@ -1,0 +1,48 @@
+---
+import Base from '../layouts/Base.astro';
+import { TOOLS } from '../lib/tools';
+
+const related = TOOLS.slice(0, 4);
+---
+
+<Base
+  title="404 — Page Not Found | TwitterTools"
+  description="The page you were looking for doesn't exist. All free TwitterTools are one click away."
+  path="/404"
+>
+  <section class="py-16 text-center sm:py-24">
+    <p class="text-6xl font-bold text-brand tabular-nums">404</p>
+    <h1 class="mt-4 text-2xl font-bold">This page doesn't exist</h1>
+    <p class="mx-auto mt-3 max-w-md text-slate-600">
+      The link may be outdated or mistyped — every tool is on the homepage, one
+      click away.
+    </p>
+    <div class="mt-8 flex flex-wrap items-center justify-center gap-3">
+      <a
+        href="/"
+        class="rounded-xl bg-brand px-8 py-3 text-sm font-semibold text-white transition hover:bg-brand-dark"
+        >All tools</a
+      >
+      <a
+        href="/bookmark-manager/"
+        class="rounded-xl border border-slate-300 px-8 py-3 text-sm font-semibold text-slate-600 transition hover:border-brand hover:text-brand"
+        >Bookmark Manager</a
+      >
+    </div>
+  </section>
+
+  <section class="mt-8">
+    <h2 class="sr-only">All tools</h2>
+    <ul class="mt-4 grid gap-3 sm:grid-cols-2">
+      {
+        related.map((t) => (
+          <li>
+            <a href={t.slug} class="block rounded-xl border border-slate-200 bg-white p-4 text-sm font-medium hover:border-brand">
+              {t.name} <span class="text-slate-400">→</span>
+            </a>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+</Base>

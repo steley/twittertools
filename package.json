@@ -1,14 +1,15 @@
 {
   "name": "twittertools",
   "version": "1.0.0",
-  "description": "TwitterTools.com — the independent toolkit for X (Twitter)",
+  "description": "TwitterTools.com \u2014 the independent toolkit for X (Twitter)",
   "type": "module",
   "private": true,
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "test": "vitest run"
   },
   "dependencies": {
     "@astrojs/sitemap": "^3.4.0",
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
     "playwright": "^1.48.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.2"
   }
 }

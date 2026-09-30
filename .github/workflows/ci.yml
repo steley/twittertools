@@ -17,6 +17,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx astro check
+      - run: npx vitest run
       - run: npm run build
       - name: Production build must not contain dev-only API references
         run: "! grep -rl '127.0.0.1:8787' dist/"
