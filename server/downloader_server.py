@@ -397,6 +397,13 @@ class Stats:
         self.upstream_ms_total = 0.0
         self.upstream_calls = 0
         self.cache_hits = 0
+        # which token candidate the upstream accepted: 'computed' (per-id
+        # algorithm), 'static' (the known-good "a"), 'none' (no token). If X
+        # ever starts validating tokens, 'computed' drops to zero here first.
+        self.token_wins: Dict[str, int] = defaultdict(int)
+
+    def note_token(self, kind: str) -> None:
+        self.token_wins[kind] += 1
 
     def note_response(self, endpoint: str, status: int) -> None:
         self.responses[endpoint][str(status)] += 1
@@ -416,6 +423,7 @@ class Stats:
                 "avg_ms": round(self.upstream_ms_total / self.upstream_calls, 1)
                 if self.upstream_calls
                 else None,
+                "token_wins": dict(self.token_wins),
             },
             "tweet_cache": {"hits": self.cache_hits, "size": len(tweet_cache)},
         }
@@ -525,6 +533,7 @@ async def _fetch_syndication(session: ClientSession, tweet_id: str) -> Tuple[int
         if data:  # non-empty tweet payload
             async with _token_mode_lock:
                 _working_token = token
+            STATS.note_token("none" if token is None else "static" if token == "a" else "computed")
             data = await enrich_note_tweet(session, tweet_id, data)
             return 200, data
         if status == 200 and data == {}:
