@@ -3,12 +3,14 @@ import Base from '../layouts/Base.astro';
 import { TOOLS } from '../lib/tools';
 
 const related = TOOLS.slice(0, 4);
+const seoDescription = "The page you were looking for doesn't exist. All free TwitterTools are one click away.";
+
 ---
 
 <Base
   title="404 — Page Not Found | TwitterTools"
-  description="The page you were looking for doesn't exist. All free TwitterTools are one click away."
-  path="/404"
+  description={seoDescription}
+  path="/404/"
 >
   <section class="py-16 text-center sm:py-24">
     <p class="text-6xl font-bold text-brand tabular-nums">404</p>

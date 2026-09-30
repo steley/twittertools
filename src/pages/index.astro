@@ -153,9 +153,9 @@ const jsonLd = {
           `<p>This post is an X Article${short ? ` — “${esc(short)}”` : ''}. What would you like to do?</p>` +
           `<div class="mt-2.5 flex flex-wrap gap-2">` +
           pill(postUrl, 'Read the article on X ↗', true) +
-          pill(toolUrl('/twitter-thread-reader', postUrl), 'Read replies') +
-          pill(toolUrl('/twitter-image-downloader', postUrl), 'Download cover') +
-          pill(toolUrl('/tweet-screenshot-generator', postUrl), 'Screenshot') +
+          pill(toolUrl('/twitter-thread-reader/', postUrl), 'Read replies') +
+          pill(toolUrl('/twitter-image-downloader/', postUrl), 'Download cover') +
+          pill(toolUrl('/tweet-screenshot-generator/', postUrl), 'Screenshot') +
           `</div>`;
         chooseBox.classList.remove('hidden');
       } else if (videos.length && photos.length) {
@@ -163,9 +163,9 @@ const jsonLd = {
         chooseBox.innerHTML =
           `<p>This post has ${videos.length} video and ${photos.length} photo${photos.length > 1 ? 's' : ''} — what would you like to do?</p>` +
           `<div class="mt-2.5 flex flex-wrap gap-2">` +
-          pill(toolUrl('/twitter-video-downloader', postUrl), 'Download video') +
+          pill(toolUrl('/twitter-video-downloader/', postUrl), 'Download video') +
           pill(toolUrl('/twitter-image-downloader', postUrl), 'Download images') +
-          pill(toolUrl('/tweet-screenshot-generator', postUrl), 'Screenshot') +
+          pill(toolUrl('/tweet-screenshot-generator/', postUrl), 'Screenshot') +
           pill(toolUrl('/twitter-thread-reader', postUrl), 'Read replies') +
           pill(postUrl, 'Open on X ↗', true) +
           `</div>`;

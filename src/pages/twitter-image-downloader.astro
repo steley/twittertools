@@ -24,9 +24,9 @@ const faq = [
   },
 ];
 
-const related = TOOLS.filter((t) => t.slug !== '/twitter-image-downloader').slice(0, 3);
-
-  const tool = TOOLS.find((t) => t.slug === '/twitter-image-downloader')!;
+  const seoDescription = "Download photos from X (Twitter) posts in full original resolution. Paste a post link, save single images or all of them at once. Free, no sign-up, works on mobile.";
+const tool = TOOLS.find((t) => t.slug === '/twitter-image-downloader/')!;
+  const related = tool.related.map((s) => TOOLS.find((t) => t.slug === s)!);
   const toolLd = {
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
@@ -35,14 +35,14 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-image-downloader').slic
     applicationCategory: 'UtilitiesApplication',
     operatingSystem: 'Any',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-    description: tool.tagline,
+    description: seoDescription,
   };
 ---
 
 <Base
   title="X (Twitter) Image Downloader — Save Photos in Original Quality"
-  description="Download photos from X (Twitter) posts in full original resolution. Paste a post link, save single images or all of them at once. Free, no sign-up, works on mobile."
-  path="/twitter-image-downloader"
+  description={seoDescription}
+  path="/twitter-image-downloader/"
     jsonLd={[toolLd]}
 >
   <ToolHero

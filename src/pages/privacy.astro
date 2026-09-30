@@ -2,15 +2,18 @@
 import Base from '../layouts/Base.astro';
 
 const updated = 'September 28, 2026';
+const seoDescription = "TwitterTools privacy policy: what we collect (almost nothing), what we never collect (your X credentials), and how the tools work without accounts.";
+
 ---
 
 <Base
   title="Privacy Policy | TwitterTools"
-  description="TwitterTools privacy policy: what we collect (almost nothing), what we never collect (your X credentials), and how the tools work without accounts."
-  path="/privacy"
+  description={seoDescription}
+  path="/privacy/"
 >
   <div class="prose-none mx-auto max-w-3xl">
     <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">Privacy Policy</h1>
+    <p class="text-xs text-slate-400">Effective date: September 30, 2026 · Last updated: September 30, 2026</p>
     <p class="mt-2 text-sm text-slate-500">Last updated: {updated}</p>
 
     <div class="mt-8 space-y-8 text-slate-700">

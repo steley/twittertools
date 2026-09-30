@@ -24,9 +24,9 @@ const faq = [
   },
 ];
 
-const related = TOOLS.filter((t) => t.slug !== '/tweet-url-parser').slice(0, 3);
-
-  const tool = TOOLS.find((t) => t.slug === '/tweet-url-parser')!;
+  const seoDescription = "Paste an X (Twitter) post URL or ID to extract the tweet ID, username, permalink and exact posting date. Works offline — dates are decoded from the Snowflake ID itself.";
+const tool = TOOLS.find((t) => t.slug === '/tweet-url-parser/')!;
+  const related = tool.related.map((s) => TOOLS.find((t) => t.slug === s)!);
   const toolLd = {
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
@@ -35,14 +35,14 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-url-parser').slice(0, 3);
     applicationCategory: 'UtilitiesApplication',
     operatingSystem: 'Any',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-    description: tool.tagline,
+    description: seoDescription,
   };
 ---
 
 <Base
   title="Tweet URL & ID Parser — Extract ID, Username and Date | TwitterTools"
-  description="Paste an X (Twitter) post URL or ID to extract the tweet ID, username, permalink and exact posting date. Works offline — dates are decoded from the Snowflake ID itself."
-  path="/tweet-url-parser"
+  description={seoDescription}
+  path="/tweet-url-parser/"
     jsonLd={[toolLd]}
 >
   <ToolHero
@@ -98,7 +98,7 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-url-parser').slice(0, 3);
       </p>
     </div>
 
-    <p id="parser-error" class="mt-4 hidden rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
+    <p id="parser-error" role="alert" class="mt-4 hidden rounded-xl bg-red-50 px-4 py-3 text-sm text-red-600">
       Couldn't find a post ID in that input. Paste a URL like https://x.com/user/status/123… or a
       numeric ID.
     </p>

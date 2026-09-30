@@ -36,9 +36,9 @@ const faq = [
   },
 ];
 
-const related = TOOLS.filter((t) => t.slug !== '/twitter-video-downloader').slice(0, 3);
-
-  const tool = TOOLS.find((t) => t.slug === '/twitter-video-downloader')!;
+  const seoDescription = "Download videos and GIFs from X (Twitter) posts for free. Paste a post link and save the MP4 in the quality you need. No app, no sign-up, works on mobile and desktop.";
+const tool = TOOLS.find((t) => t.slug === '/twitter-video-downloader/')!;
+  const related = tool.related.map((s) => TOOLS.find((t) => t.slug === s)!);
   const toolLd = {
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
@@ -47,14 +47,14 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-video-downloader').slic
     applicationCategory: 'UtilitiesApplication',
     operatingSystem: 'Any',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-    description: tool.tagline,
+    description: seoDescription,
   };
 ---
 
 <Base
   title="X (Twitter) Video Downloader — Save Videos & GIFs as MP4 | Free"
-  description="Download videos and GIFs from X (Twitter) posts for free. Paste a post link and save the MP4 in the quality you need. No app, no sign-up, works on mobile and desktop."
-  path="/twitter-video-downloader"
+  description={seoDescription}
+  path="/twitter-video-downloader/"
     jsonLd={[toolLd]}
 >
   <ToolHero

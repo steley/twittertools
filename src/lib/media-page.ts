@@ -57,6 +57,7 @@ export function wireFetcher(o: FetcherOptions): void {
     }
     o.button.disabled = true;
     o.button.textContent = o.busyLabel;
+    o.form.setAttribute('aria-busy', 'true');
     try {
       o.render(await fetchTweet(id));
     } catch (err) {
@@ -64,6 +65,7 @@ export function wireFetcher(o: FetcherOptions): void {
     } finally {
       o.button.disabled = false;
       o.button.textContent = idle;
+      o.form.removeAttribute('aria-busy');
     }
   });
 

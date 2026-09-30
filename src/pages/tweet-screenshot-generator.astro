@@ -32,9 +32,9 @@ const faq = [
   },
 ];
 
-const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').slice(0, 3);
-
-  const tool = TOOLS.find((t) => t.slug === '/tweet-screenshot-generator')!;
+  const seoDescription = "Turn any public X (Twitter) post into a polished screenshot card. Pick a light or dark theme and download it as a high-resolution PNG. Free, no sign-up, rendered in your browser.";
+const tool = TOOLS.find((t) => t.slug === '/tweet-screenshot-generator/')!;
+  const related = tool.related.map((s) => TOOLS.find((t) => t.slug === s)!);
   const toolLd = {
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
@@ -43,14 +43,14 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-screenshot-generator').sl
     applicationCategory: 'UtilitiesApplication',
     operatingSystem: 'Any',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-    description: tool.tagline,
+    description: seoDescription,
   };
 ---
 
 <Base
   title="Tweet Screenshot Generator — Turn X Posts into Images | Free"
-  description="Turn any public X (Twitter) post into a polished screenshot card. Pick a light or dark theme and download it as a high-resolution PNG. Free, no sign-up, rendered in your browser."
-  path="/tweet-screenshot-generator"
+  description={seoDescription}
+  path="/tweet-screenshot-generator/"
     jsonLd={[toolLd]}
 >
   <ToolHero

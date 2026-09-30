@@ -28,9 +28,9 @@ const faq = [
   },
 ];
 
-const related = TOOLS.filter((t) => t.slug !== '/tweet-splitter').slice(0, 3);
-
-  const tool = TOOLS.find((t) => t.slug === '/tweet-splitter')!;
+  const seoDescription = "Paste long text and split it into 280-character posts with 1/ 2/ 3/ numbering. CJK and link aware, cuts at sentences, copy each part. Free, runs in your browser.";
+const tool = TOOLS.find((t) => t.slug === '/tweet-splitter/')!;
+  const related = tool.related.map((s) => TOOLS.find((t) => t.slug === s)!);
   const toolLd = {
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
@@ -39,14 +39,14 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-splitter').slice(0, 3);
     applicationCategory: 'UtilitiesApplication',
     operatingSystem: 'Any',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-    description: tool.tagline,
+    description: seoDescription,
   };
 ---
 
 <Base
   title="Tweet Splitter — Break Long Text into a Numbered Thread | Free"
-  description="Paste long text and split it into 280-character posts with 1/ 2/ 3/ numbering. CJK and link aware, cuts at sentences, copy each part. Free, runs in your browser."
-  path="/tweet-splitter"
+  description={seoDescription}
+  path="/tweet-splitter/"
     jsonLd={[toolLd]}
 >
   <ToolHero

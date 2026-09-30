@@ -5,6 +5,8 @@ export interface Tool {
   name: string;
   tagline: string;
   category: ToolCategory;
+  /** Semantically related tool slugs (drives Related Tools links). */
+  related: string[];
   /** Simple line-art SVG (24x24, stroke-based) */
   icon: string;
 }
@@ -23,74 +25,84 @@ const svg = (inner: string) =>
 
 export const TOOLS: Tool[] = [
   {
-    slug: '/twitter-video-downloader',
+    slug: '/twitter-video-downloader/',
     name: 'X Video Downloader',
     tagline: 'Download videos and GIFs from any public post as MP4.',
     category: 'download',
     icon: svg('<path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M5 8V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2v-3" /><path d="M3 12h8" /><path d="m8 9 3 3-3 3" />'),
+    related: ['/twitter-image-downloader/', '/tweet-screenshot-generator/', '/bookmark-manager/'],
   },
   {
-    slug: '/twitter-image-downloader',
+    slug: '/twitter-image-downloader/',
     name: 'X Image Downloader',
     tagline: 'Grab full-resolution photos from posts, one or all at once.',
     category: 'download',
     icon: svg('<rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="9" cy="9" r="2" /><path d="m21 15-4.35-4.35a1 1 0 0 0-1.4 0L7 19" />'),
+    related: ['/twitter-video-downloader/', '/tweet-screenshot-generator/', '/bookmark-manager/'],
   },
   {
-    slug: '/twitter-thread-reader',
+    slug: '/twitter-thread-reader/',
     name: 'Thread Reader',
     tagline: 'Unroll a thread into one clean page. Export to Markdown, TXT, HTML or PDF.',
     category: 'read',
     icon: svg('<path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" />'),
+    related: ['/bookmark-manager/', '/tweet-screenshot-generator/', '/twitter-advanced-search-builder/'],
   },
   {
-    slug: '/bookmark-manager',
+    slug: '/bookmark-manager/',
     name: 'Bookmark Manager',
     tagline: 'Collect posts from any tool into a private, local library — export anytime.',
     category: 'read',
     icon: svg('<path d="M19 21l-7-4-7 4V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />'),
+    related: ['/twitter-thread-reader/', '/tweet-screenshot-generator/', '/twitter-video-downloader/'],
   },
   {
-    slug: '/twitter-advanced-search-builder',
+    slug: '/twitter-advanced-search-builder/',
     name: 'Advanced Search Builder',
     tagline: 'Build X search queries with a form — no operators to memorize.',
     category: 'read',
     icon: svg('<circle cx="11" cy="11" r="7" /><path d="m21 21-4.3-4.3" /><path d="M11 8v6" /><path d="M8 11h6" />'),
+    related: ['/tweet-url-parser/', '/twitter-thread-reader/', '/bookmark-manager/'],
   },
   {
-    slug: '/tweet-splitter',
+    slug: '/tweet-splitter/',
     name: 'Tweet Splitter',
     tagline: 'Break long text into a numbered thread of 280-character posts, cut at sentences.',
     category: 'write',
     icon: svg('<circle cx="6" cy="6" r="2.5" /><circle cx="6" cy="18" r="2.5" /><path d="M8.2 7.8 20 20" /><path d="M8.2 16.2 20 4" />'),
+    related: ['/tweet-character-counter/', '/twitter-font-generator/', '/twitter-thread-reader/'],
   },
   {
-    slug: '/twitter-font-generator',
+    slug: '/twitter-font-generator/',
     name: 'Font Generator',
     tagline: 'Bold, italic, script and more Unicode styles for posts and bios.',
     category: 'write',
     icon: svg('<path d="M4 7V5h16v2" /><path d="M12 5v14" /><path d="M9 19h6" />'),
+    related: ['/tweet-character-counter/', '/tweet-splitter/', '/tweet-screenshot-generator/'],
   },
   {
-    slug: '/tweet-character-counter',
+    slug: '/tweet-character-counter/',
     name: 'Character Counter',
     tagline: 'Count characters the way X does: CJK, emoji and links included.',
     category: 'write',
     icon: svg('<circle cx="12" cy="12" r="9" /><path d="M8 12h8" /><path d="M12 8v8" />'),
+    related: ['/tweet-splitter/', '/twitter-font-generator/', '/tweet-screenshot-generator/'],
   },
   {
-    slug: '/tweet-screenshot-generator',
+    slug: '/tweet-screenshot-generator/',
     name: 'Screenshot Generator',
     tagline: 'Turn any public post into a polished, shareable image.',
     category: 'create',
     icon: svg('<path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" />'),
+    related: ['/twitter-video-downloader/', '/twitter-image-downloader/', '/bookmark-manager/'],
   },
   {
-    slug: '/tweet-url-parser',
+    slug: '/tweet-url-parser/',
     name: 'URL & ID Parser',
     tagline: 'Turn a post URL into its ID, author, date — and back.',
     category: 'dev',
     icon: svg('<path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" />'),
+    related: ['/twitter-advanced-search-builder/', '/tweet-character-counter/', '/twitter-thread-reader/'],
   },
 ];
 

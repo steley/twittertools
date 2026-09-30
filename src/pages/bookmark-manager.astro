@@ -28,9 +28,9 @@ const faq = [
   },
 ];
 
-const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
-
-  const tool = TOOLS.find((t) => t.slug === '/bookmark-manager')!;
+  const seoDescription = "Collect X (Twitter) posts into a private bookmark library stored in your browser. Add from any tool or by URL, organise with tags and notes, export to JSON or Markdown. Free, no sign-up.";
+const tool = TOOLS.find((t) => t.slug === '/bookmark-manager/')!;
+  const related = tool.related.map((s) => TOOLS.find((t) => t.slug === s)!);
   const toolLd = {
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
@@ -39,14 +39,14 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
     applicationCategory: 'UtilitiesApplication',
     operatingSystem: 'Any',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-    description: tool.tagline,
+    description: seoDescription,
   };
 ---
 
 <Base
   title="Bookmark Manager — Save X Posts to a Private Local Library | Free"
-  description="Collect X (Twitter) posts into a private bookmark library stored in your browser. Add from any tool or by URL, organise with tags and notes, export to JSON or Markdown. Free, no sign-up."
-  path="/bookmark-manager"
+  description={seoDescription}
+  path="/bookmark-manager/"
     jsonLd={[toolLd]}
 >
   <Fragment slot="head">
@@ -78,7 +78,7 @@ const related = TOOLS.filter((t) => t.slug !== '/bookmark-manager').slice(0, 3);
         >
           Add
         </button>
-        <span id="bm-progress" class="text-sm text-slate-500"></span>
+        <span id="bm-progress" aria-live="polite" class="text-sm text-slate-500"></span>
       </div>
     </form>
   </section>

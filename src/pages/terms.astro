@@ -2,15 +2,18 @@
 import Base from '../layouts/Base.astro';
 
 const updated = 'September 26, 2026';
+const seoDescription = "TwitterTools terms of service: acceptable use of the free X (Twitter) tools, intellectual property policy and DMCA takedown procedure.";
+
 ---
 
 <Base
   title="Terms of Service & DMCA | TwitterTools"
-  description="TwitterTools terms of service: acceptable use of the free X (Twitter) tools, intellectual property policy and DMCA takedown procedure."
-  path="/terms"
+  description={seoDescription}
+  path="/terms/"
 >
   <div class="mx-auto max-w-3xl">
     <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">Terms of Service & DMCA</h1>
+    <p class="text-xs text-slate-400">Effective date: September 30, 2026 · Last updated: September 30, 2026</p>
     <p class="mt-2 text-sm text-slate-500">Last updated: {updated}</p>
 
     <div class="mt-8 space-y-8 text-slate-700">

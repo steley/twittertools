@@ -45,9 +45,9 @@ const faq = [
   },
 ];
 
-const related = TOOLS.filter((t) => t.slug !== '/twitter-advanced-search-builder').slice(0, 3);
-
-  const tool = TOOLS.find((t) => t.slug === '/twitter-advanced-search-builder')!;
+  const seoDescription = "Build advanced X (Twitter) searches with a simple form: filter by user, date, likes, language and more. Generates search operators like from:, min_faves: and since: automatically.";
+const tool = TOOLS.find((t) => t.slug === '/twitter-advanced-search-builder/')!;
+  const related = tool.related.map((s) => TOOLS.find((t) => t.slug === s)!);
   const toolLd = {
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
@@ -56,14 +56,14 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-advanced-search-builder
     applicationCategory: 'UtilitiesApplication',
     operatingSystem: 'Any',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-    description: tool.tagline,
+    description: seoDescription,
   };
 ---
 
 <Base
   title="X (Twitter) Advanced Search Builder — Free Query Generator"
-  description="Build advanced X (Twitter) searches with a simple form: filter by user, date, likes, language and more. Generates search operators like from:, min_faves: and since: automatically."
-  path="/twitter-advanced-search-builder"
+  description={seoDescription}
+  path="/twitter-advanced-search-builder/"
     jsonLd={[toolLd]}
 >
   <ToolHero

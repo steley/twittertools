@@ -28,9 +28,9 @@ const faq = [
   },
 ];
 
-const related = TOOLS.filter((t) => t.slug !== '/twitter-font-generator').slice(0, 3);
-
-  const tool = TOOLS.find((t) => t.slug === '/twitter-font-generator')!;
+  const seoDescription = "Turn text into bold, italic, script, Fraktur and other Unicode styles for X (Twitter) posts and bios. Copy with one click, free, runs in your browser.";
+const tool = TOOLS.find((t) => t.slug === '/twitter-font-generator/')!;
+  const related = tool.related.map((s) => TOOLS.find((t) => t.slug === s)!);
   const toolLd = {
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
@@ -39,14 +39,14 @@ const related = TOOLS.filter((t) => t.slug !== '/twitter-font-generator').slice(
     applicationCategory: 'UtilitiesApplication',
     operatingSystem: 'Any',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-    description: tool.tagline,
+    description: seoDescription,
   };
 ---
 
 <Base
   title="Twitter Font Generator — Bold, Italic & Styled Text for X | Free"
-  description="Turn text into bold, italic, script, Fraktur and other Unicode styles for X (Twitter) posts and bios. Copy with one click, free, runs in your browser."
-  path="/twitter-font-generator"
+  description={seoDescription}
+  path="/twitter-font-generator/"
     jsonLd={[toolLd]}
 >
   <ToolHero

@@ -401,9 +401,14 @@ class Stats:
         # algorithm), 'static' (the known-good "a"), 'none' (no token). If X
         # ever starts validating tokens, 'computed' drops to zero here first.
         self.token_wins: Dict[str, int] = defaultdict(int)
+        self.csp: Dict[str, int] = defaultdict(int)
 
     def note_token(self, kind: str) -> None:
         self.token_wins[kind] += 1
+
+    def note_csp(self, directive: str) -> None:
+        if len(self.csp) < 24 or directive in self.csp:
+            self.csp[directive] += 1
 
     def note_response(self, endpoint: str, status: int) -> None:
         self.responses[endpoint][str(status)] += 1
@@ -425,6 +430,7 @@ class Stats:
                 else None,
                 "token_wins": dict(self.token_wins),
             },
+            "csp_report": dict(self.csp),
             "tweet_cache": {"hits": self.cache_hits, "size": len(tweet_cache)},
         }
 
@@ -1142,6 +1148,18 @@ async def api_healthz(request: web.Request) -> web.Response:
     return web.json_response(STATS.snapshot())
 
 
+async def api_csp_report(request: web.Request) -> web.Response:
+    """Sink for the CSP-Report-Only header: counts violated directives so the
+    policy can be tightened with real data. Stores directive names only."""
+    try:
+        report = await request.json()
+        directive = str(((report or {}).get("csp-report") or {}).get("violated-directive") or "unknown")[:64]
+    except Exception:
+        directive = "malformed"
+    STATS.note_csp(directive)
+    return web.Response(status=204)
+
+
 # --------------------------------------------------------------------------- #
 # App wiring                                                                  #
 # --------------------------------------------------------------------------- #
@@ -1157,7 +1175,7 @@ def cors_for(request: web.Request) -> Dict[str, str]:
     return {}
 
 
-STATS_API_PATHS = {"/api/tweet", "/api/thread", "/api/download", "/api/healthz"}
+STATS_API_PATHS = {"/api/tweet", "/api/thread", "/api/download", "/api/healthz", "/api/csp-report"}
 
 
 @web.middleware
@@ -1223,6 +1241,7 @@ def create_app() -> web.Application:
     app.router.add_get("/api/thread", api_thread)
     app.router.add_get("/api/download", api_download)
     app.router.add_get("/api/healthz", api_healthz)
+    app.router.add_post("/api/csp-report", api_csp_report)
     app.router.add_get("/health", health)
     app.router.add_route("*", "/api/{tail:.*}", not_found)
     return app

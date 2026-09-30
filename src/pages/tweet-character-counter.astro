@@ -24,9 +24,9 @@ const faq = [
   },
 ];
 
-const related = TOOLS.filter((t) => t.slug !== '/tweet-character-counter').slice(0, 3);
-
-  const tool = TOOLS.find((t) => t.slug === '/tweet-character-counter')!;
+  const seoDescription = "Count characters exactly like X (Twitter): 280 limit, CJK and emoji count double, every link counts as 23. Free, instant and private — nothing leaves your browser.";
+const tool = TOOLS.find((t) => t.slug === '/tweet-character-counter/')!;
+  const related = tool.related.map((s) => TOOLS.find((t) => t.slug === s)!);
   const toolLd = {
     '@context': 'https://schema.org',
     '@type': 'WebApplication',
@@ -35,14 +35,14 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-character-counter').slice
     applicationCategory: 'UtilitiesApplication',
     operatingSystem: 'Any',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
-    description: tool.tagline,
+    description: seoDescription,
   };
 ---
 
 <Base
   title="Free X (Twitter) Character Counter — 280 Limit, Links & Emoji"
-  description="Count characters exactly like X (Twitter): 280 limit, CJK and emoji count double, every link counts as 23. Free, instant and private — nothing leaves your browser."
-  path="/tweet-character-counter"
+  description={seoDescription}
+  path="/tweet-character-counter/"
     jsonLd={[toolLd]}
 >
   <ToolHero
@@ -84,9 +84,9 @@ const related = TOOLS.filter((t) => t.slug !== '/tweet-character-counter').slice
     <p class="text-sm font-semibold">Writing toolkit</p>
     <p class="mt-1 text-sm text-slate-600">
       Count it here —
-      <a class="font-medium text-brand hover:underline" href="/tweet-splitter">split it into a thread</a> —
+      <a class="font-medium text-brand hover:underline" href="/tweet-splitter/">split it into a thread</a> —
       style it with the
-      <a class="font-medium text-brand hover:underline" href="/twitter-font-generator">Font Generator</a>.
+      <a class="font-medium text-brand hover:underline" href="/twitter-font-generator/">Font Generator</a>.
     </p>
   </section>
 

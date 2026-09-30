@@ -12,7 +12,7 @@ interface Props {
 }
 
 const { title, description, path, jsonLd = [] } = Astro.props;
-const canonical = `https://twittertools.com${path}`;
+const canonical = `https://twittertools.com${path.endsWith('/') ? path : path + '/'}`;
 const siteLd = {
   '@context': 'https://schema.org',
   '@type': 'WebSite',
