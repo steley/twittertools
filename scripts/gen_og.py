@@ -46,17 +46,31 @@ def main():
     sub_font = load_font(44)
     d.text((90, 350), "The independent toolkit for X (Twitter)", font=sub_font, fill=MUTED)
 
-    # feature line
-    feat_font = load_font(30)
-    d.text((90, 440), "Video Downloader  ·  Thread Reader  ·  Search Builder  ·  Character Counter",
-           font=feat_font, fill=(100, 116, 139))
+    # feature lines: all ten tools, two rows, auto-fitted to the card width
+    feat_lines = [
+        "Video Downloader  ·  Thread Reader  ·  Bookmark Manager  ·  Screenshot Generator",
+        "Character Counter  ·  Tweet Splitter  ·  Font Generator  ·  Advanced Search  ·  URL Parser",
+    ]
+    size = 30
+    while size > 20:
+        f = load_font(size)
+        if all(text_width(d, t, f) <= W - 180 for t in feat_lines):
+            break
+        size -= 2
+    feat_font = load_font(size)
+
+    y = 425
+    for line in feat_lines:
+        d.text((90, y), line, font=feat_font, fill=(100, 116, 139))
+        y += size + 26
 
     # domain pill at bottom
     pill_font = load_font(34, bold=True)
     pill_text = "twittertools.com"
     pw = text_width(d, pill_text, pill_font) + 60
-    d.rounded_rectangle([90, 510, 90 + pw, 510 + 68], radius=34, fill=(30, 41, 59))
-    d.text((90 + 30, 510 + 14), pill_text, font=pill_font, fill=(255, 255, 255))
+    pill_y = y + 10
+    d.rounded_rectangle([90, pill_y, 90 + pw, pill_y + 68], radius=34, fill=(30, 41, 59))
+    d.text((90 + 30, pill_y + 14), pill_text, font=pill_font, fill=(255, 255, 255))
 
     # small TwitterTools "T" mark top right (original geometry, not X brand assets)
     m = 96  # mark box
