@@ -604,7 +604,7 @@ async def get_guest_token(session: ClientSession, force: bool = False) -> Option
     callers await the SAME activation instead of each POSTing. (An
     asyncio.Lock here would be the cross-loop hazard noted at the module
     variables above.)"""
-    global _guest_token, _guest_activation
+    global _guest_activation
     if _guest_token and not force:
         return _guest_token
     if _guest_activation is None or _guest_activation.done():
