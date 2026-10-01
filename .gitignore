@@ -8,3 +8,7 @@ __pycache__/
 .env.*
 tweet_cache.json
 *.log
+
+# security audit working files — never publish the attack-surface map
+/audit/
+/AUDIT-REPORT.md

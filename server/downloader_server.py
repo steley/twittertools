@@ -147,10 +147,18 @@ SYNDICATION_TIMEOUT = ClientTimeout(total=10)
 
 TWEET_RATE = (60, 60)          # 60 requests / 60 s per IP
 DOWNLOAD_RATE = (40, 60)       # 40 downloads / 60 s per IP
+# Unrolling a thread walks up to ~61 upstream posts for ONE request — the
+# buckets above count requests, not upstream calls, so threads get their own
+# far tighter budget (AUDIT-002: otherwise a thread buys 60x amplification).
+THREAD_RATE = (6, 60)          # threads / 60 s per IP
+# A slow-reading client pins a streaming connection for up to the reverse
+# proxy's timeout; cap how many one IP may hold at once (AUDIT-026).
+DOWNLOAD_CONCURRENCY = 4
 # brake for the whole service, all IPs combined: a public no-login endpoint
 # needs a ceiling a single abusive client (or a bot swarm) cannot outgrow
 GLOBAL_TWEET_RATE = (300, 60)      # ~5 concurrent users at full per-IP allowance
 GLOBAL_DOWNLOAD_RATE = (120, 60)
+GLOBAL_THREAD_RATE = (30, 60)      # worst case ~1800 upstream calls/min
 
 
 def _rate_env(name: str, default: Tuple[int, int]) -> Tuple[int, int]:
@@ -394,9 +402,17 @@ def _cache_path() -> Optional[Path]:
 tweet_cache = TtlCache(TWEET_CACHE_TTL, TWEET_CACHE_SIZE, persist_path=_cache_path())
 tweet_limiter = SlidingWindowLimiter(*TWEET_RATE)
 download_limiter = SlidingWindowLimiter(*DOWNLOAD_RATE)
+thread_limiter = SlidingWindowLimiter(*_rate_env("TT_THREAD_RATE", THREAD_RATE))
 global_tweet_limiter = SlidingWindowLimiter(*_rate_env("TT_GLOBAL_TWEET_RATE", GLOBAL_TWEET_RATE))
 global_download_limiter = SlidingWindowLimiter(*_rate_env("TT_GLOBAL_DOWNLOAD_RATE", GLOBAL_DOWNLOAD_RATE))
+global_thread_limiter = SlidingWindowLimiter(*_rate_env("TT_GLOBAL_THREAD_RATE", GLOBAL_THREAD_RATE))
+_download_conc: Dict[str, int] = {}  # in-flight streams per client (AUDIT-026)
+try:
+    DOWNLOAD_CONCURRENCY = max(1, int(os.environ.get("TT_DOWNLOAD_CONCURRENCY", "") or DOWNLOAD_CONCURRENCY))
+except ValueError:
+    pass  # junk override: keep the default
 inflight: Dict[str, asyncio.Future] = {}
+thread_inflight: Dict[str, asyncio.Future] = {}  # single-flight thread walks (AUDIT-002)
 
 
 class Stats:
@@ -451,8 +467,14 @@ class Stats:
 
 STATS = Stats()
 
-_token_mode_lock = asyncio.Lock()
+# Guest-token activation is single-flighted WITHOUT an asyncio.Lock: a
+# module-level lock is created outside the running event loop, and on the
+# py3.9 deployment target that cross-loop Lock turned a slow activation into
+# 500s for every concurrent request (AUDIT-028, RuntimeError verified). A
+# plain module variable holding a Task created INSIDE the loop is
+# contention-safe under asyncio's single thread and loop-safe everywhere.
 _working_token: Optional[str] = None  # remember which candidate algorithm works
+_guest_activation: Optional["asyncio.Task"] = None
 
 
 def client_ip(request: web.Request) -> str:
@@ -541,8 +563,7 @@ async def _fetch_syndication(session: ClientSession, tweet_id: str) -> Tuple[int
         tokens = ["a"]
     tokens.append(None)  # last resort: no token parameter at all
 
-    async with _token_mode_lock:
-        preferred = _working_token
+    preferred = _working_token  # plain str read — assignment is atomic here
     order = tokens if preferred is None else [preferred] + [t for t in tokens if t != preferred]
 
     saw_404 = saw_auth = False
@@ -551,8 +572,7 @@ async def _fetch_syndication(session: ClientSession, tweet_id: str) -> Tuple[int
         status, data = await _try_syndication(session, tweet_id, token)
         last_status = status
         if data:  # non-empty tweet payload
-            async with _token_mode_lock:
-                _working_token = token
+            _working_token = token
             STATS.note_token("none" if token is None else "static" if token == "a" else "computed")
             data = await enrich_note_tweet(session, tweet_id, data)
             return 200, data
@@ -578,24 +598,42 @@ async def _fetch_syndication(session: ClientSession, tweet_id: str) -> Tuple[int
 # --------------------------------------------------------------------------- #
 
 async def get_guest_token(session: ClientSession, force: bool = False) -> Optional[str]:
-    """Anonymous web guest token — X issues one to every browser for free."""
-    global _guest_token
-    async with _token_mode_lock:
-        if _guest_token and not force:
-            return _guest_token
-        try:
-            async with session.post(
-                GUEST_ACTIVATE_URL,
-                headers={"Authorization": f"Bearer {WEB_BEARER_TOKEN}"},
-                timeout=GRAPHQL_TIMEOUT,
-            ) as resp:
-                if resp.status == 200:
-                    data = await resp.json(content_type=None)
-                    if data.get("guest_token"):
-                        _guest_token = str(data["guest_token"])
-        except (ClientError, asyncio.TimeoutError):
-            pass
+    """Anonymous web guest token — X issues one to every browser for free.
+
+    Single-flighted via a task created inside the running loop: concurrent
+    callers await the SAME activation instead of each POSTing. (An
+    asyncio.Lock here would be the cross-loop hazard noted at the module
+    variables above.)"""
+    global _guest_token, _guest_activation
+    if _guest_token and not force:
         return _guest_token
+    if _guest_activation is None or _guest_activation.done():
+        _guest_activation = asyncio.get_running_loop().create_task(_activate_guest(session))
+    try:
+        await _guest_activation
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        pass  # activation failed — the caller falls back to tokenless attempts
+    return _guest_token
+
+
+async def _activate_guest(session: ClientSession) -> None:
+    global _guest_token, _guest_activation
+    try:
+        async with session.post(
+            GUEST_ACTIVATE_URL,
+            headers={"Authorization": f"Bearer {WEB_BEARER_TOKEN}"},
+            timeout=GRAPHQL_TIMEOUT,
+        ) as resp:
+            if resp.status == 200:
+                data = await resp.json(content_type=None)
+                if data.get("guest_token"):
+                    _guest_token = str(data["guest_token"])
+    except (ClientError, asyncio.TimeoutError):
+        pass
+    finally:
+        _guest_activation = None
 
 
 async def _query_tweet_result(session: ClientSession, tweet_id: str, token: str) -> Tuple[int, Optional[dict]]:
@@ -924,7 +962,11 @@ def parse_tweet_id(raw: str) -> Optional[str]:
 # --------------------------------------------------------------------------- #
 
 async def api_tweet(request: web.Request) -> web.Response:
-    if not global_tweet_limiter.allow("global") or not tweet_limiter.allow(client_ip(request)):
+    # per-IP first, global second: a request rejected by its own bucket must
+    # not consume the shared global budget (AUDIT-003 — with the old order a
+    # single IP could crowd everyone out of the global allowance with its
+    # own rejected traffic)
+    if not tweet_limiter.allow(client_ip(request)) or not global_tweet_limiter.allow("global"):
         return json_error(429, "Too many requests, please slow down.")
 
     tweet_id = parse_tweet_id(request.query.get("id") or request.query.get("url") or "")
@@ -978,22 +1020,72 @@ async def api_tweet(request: web.Request) -> web.Response:
 
 
 async def api_thread(request: web.Request) -> web.Response:
-    if not global_tweet_limiter.allow("global") or not tweet_limiter.allow(client_ip(request)):
-        return json_error(429, "Too many requests, please slow down.")
+    # per-IP first, global second (same reasoning as api_tweet), and thread
+    # budgets are far tighter than tweet ones: one request walks up to ~61
+    # upstream posts (AUDIT-002)
+    if not thread_limiter.allow(client_ip(request)) or not global_thread_limiter.allow("global"):
+        return json_error(429, "Too many thread requests — unrolling walks the whole chain, so this budget is tight.")
 
     tweet_id = parse_tweet_id(request.query.get("url") or request.query.get("id") or "")
     if not tweet_id:
         return json_error(400, "Provide a post URL or ID, e.g. /api/thread?url=https://x.com/user/status/1")
 
+    # a thread costs tens of upstream calls — cache the result and merge
+    # concurrent requests for the same root instead of re-walking (AUDIT-002)
+    cache_key = f"thread:{tweet_id}"
+    cached = tweet_cache.get(cache_key)
+    if cached is not None:
+        STATS.cache_hits += 1
+        return web.json_response({**cached, "cached": True})
+    fut = thread_inflight.get(cache_key)
+    if fut is not None:
+        kind, payload = await fut
+        if kind == "ok":
+            return web.json_response({**payload, "cached": True})
+        return syndication_error_response(payload)
+    fut = asyncio.get_running_loop().create_future()
+    thread_inflight[cache_key] = fut
+    try:
+        tweets, partial, reason, status = await _collect_thread(
+            request.app["client_session"], tweet_id
+        )
+        if not tweets:
+            # the root post itself failed: report the real cause, not a blanket 404
+            fut.set_result(("error", status))
+            thread_inflight.pop(cache_key, None)  # failed walks must be retryable
+            return syndication_error_response(status)
+        result = {"tweets": tweets, "partial": partial, "reason": reason}
+        tweet_cache.put(cache_key, result)
+        fut.set_result(("ok", result))
+    except BaseException:
+        # cancelled (shutdown, client disconnect): fail waiters fast and never
+        # leave a pending future behind — same contract as api_tweet
+        if not fut.done():
+            fut.set_result(("error", 599))
+        thread_inflight.pop(cache_key, None)
+        raise
+    thread_inflight.pop(cache_key, None)
+    return web.json_response({**result, "cached": False})
+
+
+async def _collect_thread(
+    session: ClientSession, tweet_id: str
+) -> Tuple[List[dict], bool, Optional[str], int]:
+    """Walk the reply chain upward (plus the gated down-walk). Returns the
+    normalized tweets, the honesty flags, and the root failure status."""
     tweets: List[dict] = []
     partial = False
     reason: Optional[str] = None
     seen = set()
     current = tweet_id
+    status = 0
 
-    session = request.app["client_session"]
     for _ in range(THREAD_MAX_ANCESTORS + 1):
         if current in seen:
+            # a reply loop: what we hold is the whole loop — but it must not
+            # pass itself off as a complete thread (AUDIT-005)
+            partial = True
+            reason = "cycle_detected"
             break
         seen.add(current)
 
@@ -1016,10 +1108,15 @@ async def api_thread(request: web.Request) -> web.Response:
             break
         current = parent
         await asyncio.sleep(0.15)  # be polite to the free endpoint
+    else:
+        # the loop ran out with the chain still going: the old code returned
+        # this prefix as partial:false — silent truncation (AUDIT-005)
+        partial = True
+        reason = "ancestor_cap"
 
     if not tweets:
-        # the root post itself failed: report the real cause, not a blanket 404
-        return syndication_error_response(status)
+        # the root post itself failed — no sort/downwalk on an empty chain
+        return tweets, partial, reason, status
 
     tweets.sort(key=lambda t: int(t["id"] or 0))
     root = tweets[0]
@@ -1053,7 +1150,7 @@ async def api_thread(request: web.Request) -> web.Response:
                 await asyncio.sleep(0.15)  # be polite to the free endpoint
             tweets.sort(key=lambda t: int(t["id"] or 0))
 
-    return web.json_response({"tweets": tweets, "partial": partial, "reason": reason})
+    return tweets, partial, reason, status
 
 
 def _safe_filename(name: str, url: str, content_type: str) -> str:
@@ -1079,9 +1176,27 @@ def _safe_filename(name: str, url: str, content_type: str) -> str:
 
 
 async def api_download(request: web.Request) -> web.StreamResponse:
-    if not global_download_limiter.allow("global") or not download_limiter.allow(client_ip(request)):
+    # per-IP first, global second (AUDIT-003 — see api_tweet): a rejected
+    # request must not consume the shared global budget
+    client = client_ip(request)
+    if not download_limiter.allow(client) or not global_download_limiter.allow("global"):
         return json_error(429, "Too many downloads, please slow down.")
+    # a slow-reading client pins a streaming connection for up to the reverse
+    # proxy's timeout — cap how many one IP may hold at once (AUDIT-026)
+    if _download_conc.get(client, 0) >= DOWNLOAD_CONCURRENCY:
+        return json_error(429, "Too many concurrent downloads — let one finish first.")
+    _download_conc[client] = _download_conc.get(client, 0) + 1
+    try:
+        return await _download_stream(request)
+    finally:
+        left = _download_conc.get(client, 1) - 1
+        if left <= 0:
+            _download_conc.pop(client, None)
+        else:
+            _download_conc[client] = left
 
+
+async def _download_stream(request: web.Request) -> web.StreamResponse:
     media_url = (request.query.get("url") or "").strip()
     try:
         parsed = urlparse(media_url)

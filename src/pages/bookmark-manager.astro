@@ -220,9 +220,13 @@ const tool = TOOLS.find((t) => t.slug === '/bookmark-manager/')!;
       : item.thumb.startsWith('https://')
         ? [{ type: 'photo', url: item.thumb, width: null, height: null, postUrl: item.url }]
         : [];
-  // legacy entries predate inline media or inline video playback
+  // legacy entries predate inline media or inline video playback. Thread
+  // snapshots are NOT upgradable: they carry the whole chain in `posts`, and
+  // re-fetching the single pasted post would silently downgrade them to a
+  // one-post snapshot with the thread text gone (AUDIT-006).
   const needsUpgrade = (b: BookmarkItem): boolean =>
-    !b.media?.length || (b.mediaType === 'video' && !b.media.some((m) => m.videoUrl));
+    b.mediaType !== 'thread' &&
+    (!b.media?.length || (b.mediaType === 'video' && !b.media.some((m) => m.videoUrl)));
 
   // mixed-media posts (video + photos) count toward BOTH categories: they are
   // saved as Video (the primary type) but also match the Photo filter when

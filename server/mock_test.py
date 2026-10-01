@@ -101,6 +101,20 @@ FIXTURES = {
         tweet_obj("666666666666666666", "teaser text https://t.co/media123", "mockuser", media=[dict(PHOTO_MEDIA[0], url="https://t.co/media123")]),
         note_tweet={"note_tweet_results": {"result": {"id": "NoteTweetResults:666"}}},
     ),
+    # 63-post self-reply chain: the up-walk must stop at the 61-ancestor cap
+    # and flag it (partial / ancestor_cap) instead of passing a prefix as whole
+    **{
+        str(7000000000000000000 + i): tweet_obj(
+            str(7000000000000000000 + i),
+            f"{i}/ chain filler for the ancestor-cap test.",
+            "mockuser",
+            reply_to=str(7000000000000000000 + i - 1) if i > 1 else None,
+        )
+        for i in range(1, 64)
+    },
+    # two posts replying to each other: the walk must flag the loop
+    "8100000000000000001": tweet_obj("8100000000000000001", "loop half A.", "mockuser", reply_to="8100000000000000002"),
+    "8100000000000000002": tweet_obj("8100000000000000002", "loop half B.", "mockuser", reply_to="8100000000000000001"),
 }
 
 # sensitive / age-restricted post: the mock syndication endpoint answers this
@@ -187,6 +201,10 @@ async def mock_graphql(request):
                 [("1010101010101010101", None), ("1010101010101010102", "1010101010101010101")],
                 bottom="never-ending",
             ))
+        if focal.startswith("7000000000000000") or focal.startswith("8100000000000000"):
+            # ancestor-cap / cycle fixtures: the chain root's own conversation
+            # is empty, so the down-walk must not overwrite the up-walk's flags
+            return web.json_response(conv_response([(focal, None)]))
         return web.json_response({"errors": [{"message": "not found"}]}, status=404)
     if variables.get("tweetId") == "666666666666666666":  # TweetResultByRestId
         return web.json_response({
@@ -259,6 +277,10 @@ def run_downloader():
         TT_GRAPHQL_BASE="http://127.0.0.1:8898/graphql",
         # exercise the conversation down-walk (default-off in production)
         TT_THREAD_DOWNWALK="1",
+        # generous thread budgets for the suite itself; the tight defaults are
+        # asserted separately below
+        TT_THREAD_RATE="100/60",
+        TT_GLOBAL_THREAD_RATE="100/60",
         # keep the integration suite hermetic: no cache file in the repo
         TT_CACHE_FILE="",
     )
@@ -331,6 +353,37 @@ def run_checks():
     data = json.loads(body)
     check("thread 200", code == 200, str(body[:200]))
     check("thread ordered asc", [t["id"] for t in data["tweets"]] == sorted([t["id"] for t in data["tweets"]], key=int))
+
+    # 3b. deep chain: the up-walk stops at the 61-ancestor cap — and says so
+    # instead of passing the 61-post prefix off as a complete thread (AUDIT-005)
+    code, _, body = get("/api/thread?url=https://x.com/mockuser/status/7000000000000000063")
+    data = json.loads(body)
+    check(
+        "ancestor cap flagged",
+        code == 200 and len(data["tweets"]) == 61 and data["partial"] is True
+        and data["reason"] == "ancestor_cap",
+        f"len={len(data.get('tweets', []))} partial={data.get('partial')} reason={data.get('reason')}",
+    )
+    # 3c. thread results are cached: the identical request costs ZERO upstream
+    # calls and comes back flagged cached (AUDIT-002)
+    before = json.loads(get("/api/healthz")[2])["upstream_syndication"]["calls"]
+    code, _, body = get("/api/thread?url=https://x.com/mockuser/status/7000000000000000063")
+    data = json.loads(body)
+    after = json.loads(get("/api/healthz")[2])["upstream_syndication"]["calls"]
+    check(
+        "thread result cached",
+        code == 200 and data.get("cached") is True and after == before,
+        f"cached={data.get('cached')} upstream {before}->{after}",
+    )
+    # 3d. reply loop: the walk flags the cycle instead of passing it as whole
+    code, _, body = get("/api/thread?url=https://x.com/mockuser/status/8100000000000000001")
+    data = json.loads(body)
+    check(
+        "cycle flagged",
+        code == 200 and len(data["tweets"]) == 2 and data["partial"] is True
+        and data["reason"] == "cycle_detected",
+        f"len={len(data.get('tweets', []))} reason={data.get('reason')}",
+    )
 
     # 4. 404 tweet -> friendly error
     code, _, body = get("/api/tweet?id=404444444444444444")
@@ -438,6 +491,13 @@ def run_checks():
     _os.environ["TT_TEST_RATE"] = "junk"
     check("rate env fallback", ds._rate_env("TT_TEST_RATE", (1, 1)) == (1, 1))
     del _os.environ["TT_TEST_RATE"]
+    # 3e. the production thread budgets are the tight ones (the generous ones
+    # this suite sets are only the test override)
+    check(
+        "thread budgets tight",
+        ds.THREAD_RATE == (6, 60) and ds.GLOBAL_THREAD_RATE == (30, 60),
+        str((ds.THREAD_RATE, ds.GLOBAL_THREAD_RATE)),
+    )
 
     # 10. rate limiting keys on the real client IP (60 req / 60 s)
     rl_ip = "203.0.113.77"

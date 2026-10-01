@@ -648,7 +648,11 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-thread-reader/')!;
             ? "X cut the conversation listing short — posts near the end may be missing. Pasting the thread's last post usually fetches the rest."
             : data.reason === 'replies_unavailable'
               ? "The rest of the thread couldn't be fetched right now, so what you see may be incomplete. Try again shortly, or paste the thread's last post."
-              : 'Partially unrolled: some posts in the chain were unavailable (deleted or protected).';
+              : data.reason === 'ancestor_cap'
+                ? "This thread is longer than 61 posts — that's the most the reply chain can be walked in one go. Paste an earlier post of the thread to fetch the rest."
+                : data.reason === 'cycle_detected'
+                  ? "This reply chain loops back on itself, so the reader stopped where it started."
+                  : 'Partially unrolled: some posts in the chain were unavailable (deleted or protected).';
         partialBox.classList.remove('hidden');
       } else if (data.tweets.length === 1) {
         const solo = data.tweets[0];

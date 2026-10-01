@@ -41,6 +41,23 @@ async def mock_syndication(request):
             quoted_tweet=tweet_obj("1616161616161616161", "Original take worth quoting.", "otheruser"),
         ),
     }
+    # 63-post self-reply chain: the up-walk stops at the 61-ancestor cap and
+    # flags it (partial / ancestor_cap) instead of passing a prefix as whole
+    _chain_base = 7000000000000000000
+    for _i in range(1, 64):
+        fixtures[str(_chain_base + _i)] = tweet_obj(
+            str(_chain_base + _i),
+            f"{_i}/ chain filler for the ancestor-cap demo.",
+            "mockuser",
+            reply_to=str(_chain_base + _i - 1) if _i > 1 else None,
+        )
+    # two posts replying to each other: the walk flags the loop
+    fixtures["8100000000000000001"] = tweet_obj(
+        "8100000000000000001", "loop half A.", "mockuser", reply_to="8100000000000000002"
+    )
+    fixtures["8100000000000000002"] = tweet_obj(
+        "8100000000000000002", "loop half B.", "mockuser", reply_to="8100000000000000001"
+    )
     data = fixtures.get(request.query.get("id", ""))
     if data is None:
         return web.json_response({"detail": "No status found"}, status=404)
