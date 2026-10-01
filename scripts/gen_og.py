@@ -10,12 +10,19 @@ MUTED = (148, 163, 184)  # slate-400
 
 
 def load_font(size: int, bold: bool = False):
-    candidates = [
-        "/System/Library/Fonts/SFNS.ttf",
-        "/System/Library/Fonts/Helvetica.ttc",
-        "/System/Library/Fonts/Supplemental/Arial Bold.ttf" if bold else "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/Library/Fonts/Arial.ttf",
-    ]
+    if bold:
+        candidates = [
+            "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
+            "/System/Library/Fonts/SFNS.ttf",
+            "/System/Library/Fonts/Helvetica.ttc",
+        ]
+    else:
+        candidates = [
+            "/System/Library/Fonts/SFNS.ttf",
+            "/System/Library/Fonts/Helvetica.ttc",
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+        ]
+    candidates.append("/Library/Fonts/Arial.ttf")
     for path in candidates:
         try:
             return ImageFont.truetype(path, size)
@@ -48,7 +55,7 @@ def main():
 
     # feature lines: all ten tools, two rows, auto-fitted to the card width
     feat_lines = [
-        "Video Downloader  ·  Thread Reader  ·  Bookmark Manager  ·  Screenshot Generator",
+        "Video Downloader  ·  Image Downloader  ·  Thread Reader  ·  Bookmark Manager  ·  Screenshot Generator",
         "Character Counter  ·  Tweet Splitter  ·  Font Generator  ·  Advanced Search  ·  URL Parser",
     ]
     size = 30

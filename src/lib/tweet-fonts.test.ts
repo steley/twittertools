@@ -12,7 +12,8 @@ describe('convertWithStyle', () => {
 
   it('applies the legacy italic h (ℎ) exception', () => {
     expect(convertWithStyle('h', 1)).toBe('\u210E');
-    expect(convertWithStyle('o', 1)).toBe('\u2134');
+    // plain-range italic o — must NOT pick up the script-style glyph (U+2134)
+    expect(convertWithStyle('o', 1)).toBe('\u{1D45C}');
   });
 
   it('passes through CJK, emoji and punctuation untouched', () => {

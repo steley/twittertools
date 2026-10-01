@@ -751,6 +751,10 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-thread-reader/')!;
     }
     thread = parsePasted();
     threadTitle = 'Thread';
+    // paste-text mode never goes through adoptTweets, so drop any Save button
+    // left over from a previously unrolled thread — it would save the OLD thread
+    threadSaveBtn?.remove();
+    threadSaveBtn = null;
     render();
     if (!thread.length)
       showError('Paste the thread text first (separate posts with --- lines), or paste post links, one per line.');

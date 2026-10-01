@@ -6,7 +6,10 @@ export const X_EPOCH = 1288834974657;
 
 export function snowflakeToDate(id: string | bigint): Date {
   const n = typeof id === 'bigint' ? id : BigInt(id);
-  return new Date(Number(n >> 22n) + X_EPOCH);
+  const ms = Number(n >> 22n) + X_EPOCH;
+  // IDs past X's real range decode beyond the max JS Date (±8.64e15 ms) —
+  // surface them as Invalid Date instead of a silently-wrong value
+  return new Date(ms > 8.64e15 || ms < -8.64e15 ? NaN : ms);
 }
 
 export interface ParsedTweetUrl {
@@ -14,7 +17,10 @@ export interface ParsedTweetUrl {
   screenName: string | null;
 }
 
-const STATUS_RE = /(?:https?:\/\/)?(?:www\.|mobile\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\/status(?:es)?\/(\d{5,25})/i;
+// The (?:^|[^A-Za-z0-9-]) boundary keeps lookalike hosts (notx.com, foo-x.com)
+// from matching as x.com — the host must start at a word boundary.
+const STATUS_RE =
+  /(?:^|[^A-Za-z0-9-])(?:https?:\/\/)?(?:www\.|mobile\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\/status(?:es)?\/(\d{5,25})/i;
 const BARE_ID_RE = /^\d{5,25}$/;
 
 /** Extract a status id (and screen name when present) from a URL, bare ID, or free text. */

@@ -138,7 +138,7 @@ GRAPHQL_FEATURES = {
     "responsive_web_graphql_timeline_navigation_enabled": True,
     "responsive_web_enhance_cards_enabled": False,
 }
-TWEET_ID_RE = re.compile(r"(?:x|twitter)\.com/(?:[A-Za-z0-9_]{1,15}/)?(?:web/)?status(?:es)?/(\d{5,25})", re.I)
+TWEET_ID_RE = re.compile(r"(?<![A-Za-z0-9-])(?:x|twitter)\.com/(?:[A-Za-z0-9_]{1,15}/)?(?:web/)?status(?:es)?/(\d{5,25})", re.I)
 BARE_ID_RE = re.compile(r"^\d{5,25}$")
 TWEET_CACHE_TTL = 600          # seconds
 TWEET_CACHE_SIZE = 500
@@ -360,9 +360,23 @@ class SlidingWindowLimiter:
         if len(q) >= self.limit:
             return False
         q.append(now)
-        if len(self._hits) > 20_000:  # keep the IP table bounded
-            self._hits.clear()
+        if len(self._hits) > 20_000:
+            self._evict(now)
         return True
+
+    def _evict(self, now: float) -> None:
+        """Bound the IP table WITHOUT resetting live windows: drop fully
+        expired keys first, then (if every window is genuinely active) shed
+        the least-recently-hit quarter. A blanket clear() would hand an
+        attacker with rotatable keys a lever to reset every legitimate
+        client's brake on demand."""
+        stale = [k for k, q in self._hits.items() if not q or now - q[-1] > self.window]
+        for k in stale:
+            del self._hits[k]
+        if len(self._hits) > 20_000:
+            victims = sorted(self._hits.items(), key=lambda kv: kv[1][-1])[: len(self._hits) // 4]
+            for k, _ in victims:
+                del self._hits[k]
 
 
 def _cache_path() -> Optional[Path]:
@@ -1069,7 +1083,10 @@ async def api_download(request: web.Request) -> web.StreamResponse:
         return json_error(429, "Too many downloads, please slow down.")
 
     media_url = (request.query.get("url") or "").strip()
-    parsed = urlparse(media_url)
+    try:
+        parsed = urlparse(media_url)
+    except ValueError:  # e.g. "http://[::1" — malformed input, not a server error
+        return json_error(400, "Malformed media URL.")
     https_ok = parsed.scheme == "https"
     dev_http_ok = parsed.scheme == "http" and bool(_extra_hosts)  # only set via TT_MEDIA_HOSTS in tests
     if parsed.hostname not in MEDIA_HOSTS or not (https_ok or dev_http_ok):

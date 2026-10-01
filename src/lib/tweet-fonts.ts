@@ -20,7 +20,7 @@ interface AlphaStyle {
 
 const STYLES: AlphaStyle[] = [
   { name: 'Bold', upper: 0x1d400, lower: 0x1d41a, digits: 0x1d7ce },
-  { name: 'Italic', upper: 0x1d434, lower: 0x1d44e, lowerX: { h: 0x210e, o: 0x2134 } },
+  { name: 'Italic', upper: 0x1d434, lower: 0x1d44e, lowerX: { h: 0x210e } },
   { name: 'Bold italic', upper: 0x1d468, lower: 0x1d482 },
   {
     name: 'Script',

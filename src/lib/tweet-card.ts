@@ -151,8 +151,22 @@ function bubble(ctx: CanvasRenderingContext2D, x: number, y: number, s: number, 
 
 const imgCache = new Map<string, Promise<HTMLImageElement | null>>();
 
-function raceTimeout(p: Promise<HTMLImageElement | null>, ms: number): Promise<HTMLImageElement | null> {
-  return Promise.race([p, new Promise<null>((r) => setTimeout(() => r(null), ms))]);
+// Sentinel for "the timeout fired" — distinct from null, which means the
+// image failed fast (404 on a deleted image, say). Only a stall proves the
+// CDN is unreachable; a fast error must not poison the 12h blocked-memory.
+const RACE_TIMED_OUT = Symbol('race-timed-out');
+
+function raceTimeout<T>(
+  p: Promise<T>,
+  ms: number
+): Promise<T | typeof RACE_TIMED_OUT> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    p,
+    new Promise<typeof RACE_TIMED_OUT>((r) => {
+      timer = setTimeout(() => r(RACE_TIMED_OUT), ms);
+    }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 async function loadImage(url: string): Promise<HTMLImageElement | null> {
@@ -177,19 +191,25 @@ async function loadImage(url: string): Promise<HTMLImageElement | null> {
       }
       if (!cdnDirectBlocked(host)) {
         const direct = await raceTimeout(img(url, true), 2500);
-        if (direct) {
+        if (direct && direct !== RACE_TIMED_OUT) {
           clearCdnDirectBlocked(); // CDN reachable again — back to direct next time
           return direct;
         }
-        markCdnDirectBlocked(host); // unreachable/blocked — stop paying the timeout
+        if (direct === RACE_TIMED_OUT) markCdnDirectBlocked(host); // stalled — stop paying the timeout
       }
       // fall back to our same-origin media proxy (never taints the canvas —
       // the proxy always answers with Access-Control-Allow-Origin, so load
       // it in CORS mode or the canvas gets tainted and export fails).
       // Inline disposition: iOS Safari refuses attachment-served images.
-      return raceTimeout(img(proxiedDownloadUrl(url, 'card-media', true), true), 12000);
+      const proxied = await raceTimeout(img(proxiedDownloadUrl(url, 'card-media', true), true), 12000);
+      return proxied && proxied !== RACE_TIMED_OUT ? proxied : null;
     })();
     imgCache.set(url, entry);
+    // a permanent null (both paths failed) shouldn't stick for the session —
+    // drop it so the next render retries
+    void entry.then((r) => {
+      if (!r) imgCache.delete(url);
+    });
   }
   return entry;
 }

@@ -59,8 +59,10 @@ export interface ThreadResponse {
 }
 
 export function extractTweetId(input: string): string | null {
-  // Matches /status/<id>, /<user>/status(es)/<id> and /i/web/status/<id>
-  const m = input.match(/(?:x|twitter)\.com\/(?:[A-Za-z0-9_]{1,15}\/)?(?:web\/)?status(?:es)?\/(\d{5,25})/i);
+  // Matches /status/<id>, /<user>/status(es)/<id> and /i/web/status/<id>. The
+  // leading boundary keeps lookalike hosts (notx.com, foo-x.com) from matching
+  // as x.com — the host must start at a word boundary.
+  const m = input.match(/(?:^|[^A-Za-z0-9-])(?:x|twitter)\.com\/(?:[A-Za-z0-9_]{1,15}\/)?(?:web\/)?status(?:es)?\/(\d{5,25})/i);
   if (m) return m[1];
   const bare = input.trim().match(/^(\d{5,25})$/);
   return bare ? bare[1] : null;
