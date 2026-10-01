@@ -60,6 +60,7 @@ const jsonLd = {
     </p>
     <div
       id="home-error"
+      role="alert"
       class="mx-auto mt-4 hidden max-w-2xl rounded-xl bg-red-50 px-4 py-3 text-left text-sm text-red-600"
     ></div>
     <div
@@ -161,21 +162,21 @@ const jsonLd = {
       } else if (videos.length && photos.length) {
         // mixed media: no single right tool — show the action card instead
         chooseBox.innerHTML =
-          `<p>This post has ${videos.length} video and ${photos.length} photo${photos.length > 1 ? 's' : ''} — what would you like to do?</p>` +
+          `<p>This post has ${videos.length} video${videos.length > 1 ? 's' : ''} and ${photos.length} photo${photos.length > 1 ? 's' : ''} — what would you like to do?</p>` +
           `<div class="mt-2.5 flex flex-wrap gap-2">` +
           pill(toolUrl('/twitter-video-downloader/', postUrl), 'Download video') +
-          pill(toolUrl('/twitter-image-downloader', postUrl), 'Download images') +
+          pill(toolUrl('/twitter-image-downloader/', postUrl), 'Download images') +
           pill(toolUrl('/tweet-screenshot-generator/', postUrl), 'Screenshot') +
-          pill(toolUrl('/twitter-thread-reader', postUrl), 'Read replies') +
+          pill(toolUrl('/twitter-thread-reader/', postUrl), 'Read replies') +
           pill(postUrl, 'Open on X ↗', true) +
           `</div>`;
         chooseBox.classList.remove('hidden');
       } else if (videos.length) {
-        location.assign(toolUrl('/twitter-video-downloader', postUrl));
+        location.assign(toolUrl('/twitter-video-downloader/', postUrl));
       } else if (photos.length) {
-        location.assign(toolUrl('/twitter-image-downloader', postUrl));
+        location.assign(toolUrl('/twitter-image-downloader/', postUrl));
       } else {
-        location.assign(toolUrl('/twitter-thread-reader', postUrl));
+        location.assign(toolUrl('/twitter-thread-reader/', postUrl));
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';

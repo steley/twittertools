@@ -4,6 +4,9 @@
   "description": "TwitterTools.com \u2014 the independent toolkit for X (Twitter)",
   "type": "module",
   "private": true,
+  "engines": {
+    "node": ">=20.3.0"
+  },
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",

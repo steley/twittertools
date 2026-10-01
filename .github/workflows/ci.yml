@@ -5,10 +5,18 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   frontend:
     name: Astro check + build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,11 +28,19 @@ jobs:
       - run: npx vitest run
       - run: npm run build
       - name: Production build must not contain dev-only API references
-        run: "! grep -rl '127.0.0.1:8787' dist/"
+        run: |
+          test -d dist || { echo "dist/ directory missing" >&2; exit 1; }
+          # no `! grep` here: it would treat grep's exit code 2 (missing dir,
+          # bad path) as success — fail explicitly on a match instead
+          if grep -rq '127.0.0.1:8787' dist/; then
+            echo "Dev-only API reference found in production build" >&2
+            exit 1
+          fi
 
   backend:
     name: pyflakes + integration tests
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: server
@@ -43,6 +59,7 @@ jobs:
   smoke:
     name: Page smoke tests (playwright)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -52,6 +69,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.9'
+          cache: pip
+          cache-dependency-path: server/requirements.txt
       - run: pip install -r server/requirements.txt
       - run: npm ci
       - run: npm run build
@@ -65,12 +84,15 @@ jobs:
           python server/downloader_server.py > /tmp/api.log 2>&1 &
           python server/dev_proxy.py > /tmp/proxy.log 2>&1 &
           for port in 8898 8787 8080; do
+            ready=0
             for i in $(seq 1 30); do
-              curl -s -o /dev/null "http://127.0.0.1:$port/" && break
+              curl -s -o /dev/null "http://127.0.0.1:$port/" && { ready=1; break; }
               sleep 1
             done
+            [ "$ready" = 1 ] || { echo "port $port never became ready" >&2; exit 1; }
           done
-          curl -s http://127.0.0.1:8080/api/healthz
+          # -f so an HTTP error status fails the step instead of passing
+          curl -sf http://127.0.0.1:8080/api/healthz
       - name: Run smoke tests
         run: node scripts/smoke.mjs
       - name: Stack logs on failure

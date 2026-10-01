@@ -30,8 +30,11 @@ self.addEventListener('install', () => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     (async () => {
+      // CacheStorage is scoped to the ORIGIN, not to this worker's scope —
+      // only touch caches this worker owns (the bm- prefix), never another
+      // worker's or page's caches.
       for (const name of await caches.keys()) {
-        if (name !== SHELL && name !== MEDIA) await caches.delete(name);
+        if (name.startsWith('bm-') && name !== SHELL && name !== MEDIA) await caches.delete(name);
       }
       await self.clients.claim();
     })()
@@ -44,11 +47,16 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // cross-origin: hands off
 
+  // Path boundary helpers — startsWith alone would also match sibling paths
+  // like /api/downloads or /bookmark-manager-admin.
+  const isDownload = url.pathname === '/api/download' || url.pathname.startsWith('/api/download?');
+  const inBookmarkApp = url.pathname === '/bookmark-manager' || url.pathname.startsWith('/bookmark-manager/');
+
   // API JSON — never cached
-  if (url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/download')) return;
+  if (url.pathname.startsWith('/api/') && !isDownload) return;
 
   // proxied media — cache-first, TTL, capped
-  if (url.pathname.startsWith('/api/download')) {
+  if (isDownload) {
     event.respondWith(
       (async () => {
         const cache = await caches.open(MEDIA);
@@ -68,7 +76,9 @@ self.addEventListener('fetch', (event) => {
               headers,
             });
             await cache.put(req, stamped);
-            trimMedia(cache);
+            // eviction runs after respondWith resolves — tie it to the event
+            // so the worker isn't killed mid-trim
+            event.waitUntil(trimMedia(cache));
           }
           return res;
         } catch {
@@ -80,7 +90,7 @@ self.addEventListener('fetch', (event) => {
   }
 
   // app shell navigation — network-first, offline fallback
-  if (req.mode === 'navigate' && url.pathname.startsWith('/bookmark-manager')) {
+  if (req.mode === 'navigate' && inBookmarkApp) {
     event.respondWith(
       (async () => {
         const cache = await caches.open(SHELL);
@@ -109,6 +119,7 @@ self.addEventListener('fetch', (event) => {
             return res;
           })
           .catch(() => undefined);
+        event.waitUntil(refresh); // keep the revalidation alive past respondWith
         return hit || (await refresh) || Response.error();
       })()
     );

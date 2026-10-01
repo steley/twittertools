@@ -168,8 +168,10 @@ export function normalizeItem(raw: unknown): BookmarkItem {
           url: str(m?.url),
           width: typeof m?.width === 'number' ? m.width : null,
           height: typeof m?.height === 'number' ? m.height : null,
-          postUrl: str(m?.postUrl) || undefined,
-          videoUrl: str(m?.videoUrl) || undefined,
+          // https-only like url: these feed <video> src and link hrefs, so a
+          // javascript:/data: URL in a malicious import must not survive
+          postUrl: str(m?.postUrl).startsWith('https://') ? str(m?.postUrl) : undefined,
+          videoUrl: str(m?.videoUrl).startsWith('https://') ? str(m?.videoUrl) : undefined,
         }))
         .filter((m) => m.url.startsWith('https://'))
     : // legacy entries (and old exports) only carry the thumbnail
@@ -229,6 +231,7 @@ export function bookmarkToggleButton(item: BookmarkItem): HTMLButtonElement {
   getBookmark(item.id)
     .then((hit) => paint(!!hit))
     .catch(() => paint(false));
+  b.type = 'button'; // never submit an enclosing form
   b.addEventListener('click', async () => {
     b.disabled = true;
     try {
@@ -239,6 +242,10 @@ export function bookmarkToggleButton(item: BookmarkItem): HTMLButtonElement {
         await putBookmark(item);
         paint(true);
       }
+    } catch {
+      // storage failure (private mode, quota): keep the stored state and hint
+      b.textContent = 'Error — try again';
+      setTimeout(() => paint(b.dataset.saved === 'true'), 1500);
     } finally {
       b.disabled = false;
     }

@@ -128,7 +128,7 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-image-downloader/')!;
 </Base>
 
 <script>
-  import { proxiedDownloadUrl, wireMediaImg, type MediaItem, type TweetData } from '../lib/api';
+  import { cdnDisplayUrl, proxiedDownloadUrl, wireMediaImg, type MediaItem, type TweetData } from '../lib/api';
   import { bookmarkToggleButton, tweetToBookmark } from '../lib/bookmark-store';
   import { el, renderTweetHeader, wireFetcher } from '../lib/media-page';
 
@@ -142,10 +142,20 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-image-downloader/')!;
   function origUrl(url: string): string {
     const m = url.match(/^(https:\/\/pbs\.twimg\.com\/media\/[A-Za-z0-9_-]+?)(?:\.([a-z0-9]+))?(?:\?.*)?$/i);
     if (m) {
-      const ext = m[2] || 'jpg';
+      // the real type often lives only in the query (?format=png&name=small) —
+      // honor it before falling back to jpg, which the CDN may not have
+      const queryFormat = url.match(/[?&]format=([a-z0-9]+)/i)?.[1];
+      const ext = m[2] || queryFormat || 'jpg';
       return `${m[1]}?format=${ext}&name=orig`;
     }
-    return url + ':orig';
+    return url; // not a pbs media URL — leave it untouched instead of breaking it
+  }
+
+  /** Consistent download filename for single and bulk downloads alike. */
+  function origFilename(url: string): string {
+    const base = origUrl(url).split('?')[0].split('/').pop() ?? 'photo';
+    const ext = base.match(/\.(jpg|jpeg|png|webp|gif)$/i)?.[1] ?? 'jpg';
+    return base.replace(/\.(jpg|jpeg|png|webp|gif)$/i, '') + '-orig.' + ext;
   }
 
   function renderTweet(t: TweetData) {
@@ -189,7 +199,7 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-image-downloader/')!;
         img.alt = 'Post image';
         img.loading = 'lazy';
         img.className = 'max-h-72 w-full bg-slate-100 object-contain';
-        wireMediaImg(img, p.url + (p.url.includes('?') ? '&' : '?') + 'name=small', 'image-preview');
+        wireMediaImg(img, cdnDisplayUrl(p.url, 'small'), 'image-preview');
         card.appendChild(img);
 
         const bar = el('div', 'flex items-center gap-2 px-3 py-2.5');
@@ -204,10 +214,7 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-image-downloader/')!;
         open.textContent = 'Open';
         bar.appendChild(open);
         const dl = document.createElement('a');
-        const base = origUrl(p.url).split('?')[0].split('/').pop() ?? 'photo.jpg';
-        const ext = base.match(/\.(jpg|jpeg|png|webp|gif)$/i)?.[1] ?? 'jpg';
-        const name = base.replace(/\.(jpg|jpeg|png|webp|gif)$/i, '') + '-orig.' + ext;
-        dl.href = proxiedDownloadUrl(origUrl(p.url), name);
+        dl.href = proxiedDownloadUrl(origUrl(p.url), origFilename(p.url));
         dl.download = '';
         dl.className = 'rounded-full bg-brand px-4 py-1.5 text-xs font-semibold text-white hover:bg-brand-dark';
         dl.textContent = 'Download';
@@ -230,10 +237,8 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-image-downloader/')!;
 
   async function downloadAll(photos: MediaItem[]) {
     for (const p of photos) {
-      const base = origUrl(p.url).split('?')[0].split('/').pop() ?? 'photo.jpg';
-      const ext = base.match(/\.(jpg|jpeg|png|webp|gif)$/i)?.[1] ?? 'jpg';
       const a = document.createElement('a');
-      a.href = proxiedDownloadUrl(origUrl(p.url), base.replace(/\.(jpg|jpeg|png|webp|gif)$/i, '') + '-orig.' + ext);
+      a.href = proxiedDownloadUrl(origUrl(p.url), origFilename(p.url));
       a.download = '';
       document.body.appendChild(a);
       a.click();

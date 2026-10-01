@@ -26,16 +26,19 @@ const nav = [
     </a>
     <nav class="ml-auto flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-slate-600" aria-label="Main">
       {
-        nav.map((item) => (
-          <a href={item.href} class="hover:text-brand">
-            {item.label}
-            {item.badge && (
-              <span class="ml-1 rounded-full bg-brand/10 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-brand">
-                {item.badge}
-              </span>
-            )}
-          </a>
-        ))
+        nav.map((item) => {
+          const current = Astro.url.pathname === item.href || Astro.url.pathname === item.href + '/';
+          return (
+            <a href={item.href} aria-current={current ? 'page' : undefined} class="hover:text-brand">
+              {item.label}
+              {item.badge && (
+                <span class="ml-1 rounded-full bg-brand/10 px-1.5 py-0.5 align-middle text-[10px] font-semibold text-brand">
+                  {item.badge}
+                </span>
+              )}
+            </a>
+          );
+        })
       }
     </nav>
   </div>

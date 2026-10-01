@@ -6,12 +6,18 @@
   --color-ink: #0f1419;
 }
 
-html {
-  scroll-behavior: smooth;
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
 }
 
-/* Tighter focus ring consistent with the brand */
-:focus-visible {
-  outline: 2px solid var(--color-brand);
-  outline-offset: 2px;
+/* Focus ring consistent with the brand. Darker than --color-brand so it keeps
+   >=3:1 contrast on white (WCAG 1.4.11 non-text). Layered under Tailwind so
+   focus-visible:* utilities can still override it. */
+@layer base {
+  :focus-visible {
+    outline: 2px solid var(--color-brand-dark);
+    outline-offset: 2px;
+  }
 }

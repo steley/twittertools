@@ -11,7 +11,7 @@ import asyncio
 import os
 import pathlib
 
-from aiohttp import ClientSession, web
+from aiohttp import ClientSession, ClientTimeout, web
 
 DIST = pathlib.Path(os.environ.get("DIST_DIR", pathlib.Path(__file__).resolve().parent.parent / "dist"))
 API_PORT = int(os.environ.get("API_PORT", "8787"))
@@ -25,12 +25,16 @@ DROP_HEADERS = {"host", "accept-encoding", "connection", "content-length", "tran
 async def proxy(request: web.Request) -> web.Response:
     url = f"http://127.0.0.1:{API_PORT}" + request.rel_url.path_qs
     headers = {k: v for k, v in request.headers.items() if k.lower() not in DROP_HEADERS}
-    async with request.app["session"].get(url, headers=headers) as upstream:
-        body = await upstream.read()
-        headers = {k: v for k, v in upstream.headers.items()
-                   if k.lower() not in ("content-length", "content-type", "transfer-encoding")}
-        return web.Response(status=upstream.status, body=body, headers=headers,
-                            content_type=upstream.headers.get("Content-Type", "text/plain").split(";")[0].strip())
+    try:
+        async with request.app["session"].get(url, headers=headers, timeout=ClientTimeout(total=120)) as upstream:
+            body = await upstream.read()
+            headers = {k: v for k, v in upstream.headers.items()
+                       if k.lower() not in ("content-length", "content-type", "transfer-encoding")}
+            return web.Response(status=upstream.status, body=body, headers=headers,
+                                content_type=upstream.headers.get("Content-Type", "text/plain").split(";")[0].strip())
+    except Exception:
+        # backend down or hanging: a clean 502 beats an unhandled 500 / 5-min stall
+        return web.Response(status=502, text="API unreachable — is downloader_server.py running?")
 
 
 async def handler(request: web.Request) -> web.StreamResponse:
@@ -55,6 +59,11 @@ async def handler(request: web.Request) -> web.StreamResponse:
 def make_app() -> web.Application:
     app = web.Application()
     app["session"] = ClientSession()
+
+    async def _close_session(app: web.Application) -> None:
+        await app["session"].close()
+
+    app.on_cleanup.append(_close_session)
     app.router.add_route("GET", "/{tail:.*}", handler)
     return app
 

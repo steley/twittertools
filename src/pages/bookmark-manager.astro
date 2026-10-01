@@ -249,7 +249,9 @@ const tool = TOOLS.find((t) => t.slug === '/bookmark-manager/')!;
   let viewerImgs: (HTMLImageElement | null)[] = [];
   let viewerIdx = 0;
   let viewerVideo: HTMLVideoElement | null = null;
+  let viewerStallTimer = 0; // 6s canplay watchdog for the currently open video
   const stopViewerVideo = () => {
+    window.clearTimeout(viewerStallTimer); // a closed viewer must not re-src a detached <video>
     if (viewerVideo) {
       viewerVideo.pause();
       viewerVideo = null;
@@ -277,10 +279,10 @@ const tool = TOOLS.find((t) => t.slug === '/bookmark-manager/')!;
       const fallbackToProxy = () => {
         if (!v.src.includes('/api/download')) v.src = proxiedDownloadUrl(m.videoUrl!, 'video.mp4', true);
       };
-      const stallTimer = window.setTimeout(fallbackToProxy, 6000);
-      v.addEventListener('canplay', () => window.clearTimeout(stallTimer), { once: true });
+      viewerStallTimer = window.setTimeout(fallbackToProxy, 6000);
+      v.addEventListener('canplay', () => window.clearTimeout(viewerStallTimer), { once: true });
       v.addEventListener('error', () => {
-        window.clearTimeout(stallTimer);
+        window.clearTimeout(viewerStallTimer);
         if (v.src.includes('/api/download')) {
           // both paths failed — say so instead of leaving a dead player
           const note = el('div', 'flex h-56 max-w-full items-center justify-center rounded-xl bg-slate-100 px-6 text-center text-sm text-slate-500');
@@ -685,10 +687,11 @@ const tool = TOOLS.find((t) => t.slug === '/bookmark-manager/')!;
     let noteTimer: ReturnType<typeof setTimeout> | undefined;
     noteArea.addEventListener('input', () => {
       clearTimeout(noteTimer);
-      noteTimer = setTimeout(() => {
-        item.note = noteArea.value;
-        putBookmark(item);
-      }, 600);
+    noteTimer = setTimeout(() => {
+      item.note = noteArea.value;
+      // a pending save must not resurrect a bookmark deleted in the meantime
+      if (all.some((b) => b.id === item.id)) putBookmark(item);
+    }, 600);
     });
     panel.appendChild(noteArea);
     edit.addEventListener('click', () => panel.classList.toggle('hidden'));
@@ -716,34 +719,38 @@ const tool = TOOLS.find((t) => t.slug === '/bookmark-manager/')!;
     let dup = 0;
     let failed = 0;
     let upgraded = 0;
-    for (let i = 0; i < batch.length; i++) {
-      progress.textContent = `Fetching ${i + 1}/${batch.length}…`;
-      try {
-        const existing = await getBookmark(batch[i]);
-        if (existing && !needsUpgrade(existing)) {
-          dup++;
-        } else {
-          const t = await fetchTweet(batch[i]);
-          const fresh = tweetToBookmark(t);
-          if (existing) {
-            // refresh a legacy entry in place (inline media / video playback),
-            // keeping the user's tags and note
-            fresh.tags = existing.tags;
-            fresh.note = existing.note;
-            upgraded++;
+    try {
+      for (let i = 0; i < batch.length; i++) {
+        progress.textContent = `Fetching ${i + 1}/${batch.length}…`;
+        try {
+          const existing = await getBookmark(batch[i]);
+          if (existing && !needsUpgrade(existing)) {
+            dup++;
           } else {
-            added++;
+            const t = await fetchTweet(batch[i]);
+            const fresh = tweetToBookmark(t);
+            if (existing) {
+              // refresh a legacy entry in place (inline media / video playback),
+              // keeping the user's tags and note
+              fresh.tags = existing.tags;
+              fresh.note = existing.note;
+              upgraded++;
+            } else {
+              added++;
+            }
+            await putBookmark(fresh);
           }
-          await putBookmark(fresh);
+        } catch {
+          failed++;
         }
-      } catch {
-        failed++;
+        await new Promise((r) => setTimeout(r, 1100)); // stay well under the API rate limit
       }
-      await new Promise((r) => setTimeout(r, 1100)); // stay well under the API rate limit
+    } finally {
+      // the button must recover even if listBookmarks/render throws
+      addBtn.disabled = false;
     }
     urlsBox.value = '';
     progress.textContent = `Added ${added}${upgraded ? `, ${upgraded} refreshed` : ''}${dup ? `, ${dup} already saved` : ''}${failed ? `, ${failed} failed` : ''}.`;
-    addBtn.disabled = false;
     all = await listBookmarks();
     render();
   });
@@ -784,9 +791,21 @@ const tool = TOOLS.find((t) => t.slug === '/bookmark-manager/')!;
   window.addEventListener('appinstalled', () => installBtn.classList.add('hidden'));
   const standalone =
     window.matchMedia('(display-mode: standalone)').matches || ('standalone' in window.navigator && window.navigator.standalone);
-  if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !standalone && !localStorage.getItem('bm-ios-hint-seen')) {
+  // storage can throw entirely (cookies disabled, sandboxed context) — guard
+  // both reads and writes so the rest of the script below still gets wired up
+  let iosHintSeen = false;
+  try {
+    iosHintSeen = !!localStorage.getItem('bm-ios-hint-seen');
+  } catch {
+    /* storage unavailable — just show the hint */
+  }
+  if (/iphone|ipad|ipod/i.test(navigator.userAgent) && !standalone && !iosHintSeen) {
     iosHint.classList.remove('hidden');
-    localStorage.setItem('bm-ios-hint-seen', '1');
+    try {
+      localStorage.setItem('bm-ios-hint-seen', '1');
+    } catch {
+      /* private mode */
+    }
   }
 
   document.getElementById('bm-export-json')!.addEventListener('click', () => {
@@ -846,7 +865,14 @@ const tool = TOOLS.find((t) => t.slug === '/bookmark-manager/')!;
     progress.textContent = 'Parsing…';
     try {
       if (/window\.YTD/.test(text)) {
-        // X data archive format: entries carry only tweetIds — resolve via the API
+        // X data archive format: entries carry only tweetIds — resolve via the API.
+        // Other collections (likes.js etc.) also carry "tweetId" — only accept
+        // the bookmarks one, or a likes import would silently become bookmarks.
+        const collection = /window\.YTD\.([A-Za-z]+)/.exec(text)?.[1];
+        if (collection && collection !== 'bookmark') {
+          progress.textContent = `That file is the "${collection}" collection — import the bookmarks.js file instead.`;
+          return;
+        }
         const ids = [...text.matchAll(/"tweetId"\s*:\s*"(\d+)"/g)].map((m) => m[1]);
         const unique = [...new Set(ids)].slice(0, 50);
         if (!unique.length) {
