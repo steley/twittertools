@@ -26,6 +26,8 @@ agent does the reading.
 - Contact addresses hello@ / dmca@ are live mailboxes.
 - Status-URL regexes are left-anchored on purpose — lookalike hosts
   (notx.com, foo-x.com) must not parse as x.com.
-- Checks: `npx astro check`, `npx vitest run` (frontend); `python mock_test.py`
-  (backend, offline); `node scripts/smoke.mjs` (full stack, see the smoke job
-  in `.github/workflows/ci.yml` for the local mock setup).
+- Checks: `npx astro check`, `npx vitest run` (frontend); `python -m pyflakes
+  downloader_server.py mock_test.py dev_mocks.py dev_proxy.py` and
+  `python mock_test.py` (backend, offline); `node scripts/smoke.mjs` (full
+  stack, see the smoke job in `.github/workflows/ci.yml` for the local mock
+  setup).
