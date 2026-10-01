@@ -58,9 +58,9 @@ SYNDICATION_URL = os.environ.get(
 # the allowlist matches parsed.hostname, which never carries a port
 _extra_hosts = [h.split(":")[0].strip().lower() for h in os.environ.get("TT_MEDIA_HOSTS", "").split(",") if h.strip()]
 MEDIA_HOSTS = {"pbs.twimg.com", "video.twimg.com", "ton.twimg.com"} | set(_extra_hosts)
-# Optional outbound proxy, e.g. TT_PROXY=socks5h://127.0.0.1:1089 for local dev
-# behind a censored network ("h" = resolve DNS on the proxy side, dodging
-# poisoned answers). Production VPSes that can reach X directly leave it unset.
+# Optional outbound proxy via TT_PROXY for local dev (e.g. socks5h://127.0.0.1:1080
+# — "h" = resolve DNS on the proxy side). Production servers that can reach X
+# directly leave it unset.
 PROXY_URL = os.environ.get("TT_PROXY", "").strip() or None
 USER_AGENT = (
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
