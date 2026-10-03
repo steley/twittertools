@@ -226,7 +226,7 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-image-downloader/')!;
     } else if (videos.length) {
       const note = el('p', 'mt-4 rounded-xl bg-sky-50 px-4 py-3 text-sm text-sky-700');
       note.innerHTML =
-        'This post contains video/GIF but no photo. Use the <a class="font-semibold underline" href="/twitter-video-downloader">Video Downloader</a> for those.';
+        'This post contains video/GIF but no photo. Use the <a class="font-semibold underline" href="/twitter-video-downloader/">Video Downloader</a> for those.';
       result.appendChild(note);
     } else {
       const note = el('p', 'mt-4 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-700');

@@ -2,10 +2,10 @@
 // Nav order follows expected usage frequency: the fetch-first tools lead,
 // the manager (newest) collects what they produce. Revisit once analytics exist.
 const nav = [
-  { href: '/twitter-video-downloader', label: 'Video Downloader' },
-  { href: '/twitter-thread-reader', label: 'Thread Reader' },
-  { href: '/tweet-screenshot-generator', label: 'Screenshot Generator' },
-  { href: '/bookmark-manager', label: 'Bookmark Manager', badge: 'New' },
+  { href: '/twitter-video-downloader/', label: 'Video Downloader' },
+  { href: '/twitter-thread-reader/', label: 'Thread Reader' },
+  { href: '/tweet-screenshot-generator/', label: 'Screenshot Generator' },
+  { href: '/bookmark-manager/', label: 'Bookmark Manager', badge: 'New' },
 ];
 ---
 
@@ -27,7 +27,7 @@ const nav = [
     <nav class="ml-auto flex flex-wrap items-center gap-x-5 gap-y-1 text-sm text-slate-600" aria-label="Main">
       {
         nav.map((item) => {
-          const current = Astro.url.pathname === item.href || Astro.url.pathname === item.href + '/';
+          const current = Astro.url.pathname === item.href;
           return (
             <a href={item.href} aria-current={current ? 'page' : undefined} class="hover:text-brand">
               {item.label}

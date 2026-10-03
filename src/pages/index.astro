@@ -182,9 +182,9 @@ const jsonLd = {
       const msg = err instanceof Error ? err.message : 'Something went wrong. Please try again.';
       errorBox.innerHTML =
         `${esc(msg)} You can also go straight to the ` +
-        `<a class="font-semibold underline" href="/twitter-video-downloader">Video Downloader</a>, ` +
-        `<a class="font-semibold underline" href="/twitter-image-downloader">Image Downloader</a> or ` +
-        `<a class="font-semibold underline" href="/twitter-thread-reader">Thread Reader</a>.`;
+        `<a class="font-semibold underline" href="/twitter-video-downloader/">Video Downloader</a>, ` +
+        `<a class="font-semibold underline" href="/twitter-image-downloader/">Image Downloader</a> or ` +
+        `<a class="font-semibold underline" href="/twitter-thread-reader/">Thread Reader</a>.`;
       errorBox.classList.remove('hidden');
     } finally {
       btn.disabled = false;
