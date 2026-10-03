@@ -227,7 +227,16 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-video-downloader/')!;
             dl.textContent = '✓ Saved';
           } else {
             dl.textContent = prev;
-            window.location.href = dl.href; // attachment stream — page stays put
+            // hand the proxied URL to the download channel via an anchor with
+            // `download`: navigating to an attachment URL makes the browser
+            // fetch the body TWICE (navigation + download manager) — doubling
+            // the proxied bandwidth per click
+            const nav = document.createElement('a');
+            nav.href = dl.href;
+            nav.download = '';
+            document.body.appendChild(nav);
+            nav.click();
+            nav.remove();
           }
           setTimeout(() => {
             delete dl.dataset.busy;
