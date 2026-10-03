@@ -36,7 +36,7 @@ const faq = [
   },
 ];
 
-  const seoDescription = "Download videos and GIFs from X (Twitter) posts for free. Paste a post link and save the MP4 in the quality you need. No app, no sign-up, works on mobile and desktop.";
+  const seoDescription = "Download videos and GIFs from X (Twitter) posts for free. Paste a post link and save the MP4 in the quality you need — no app, no sign-up, works on mobile.";
 const tool = TOOLS.find((t) => t.slug === '/twitter-video-downloader/')!;
   const related = tool.related.map((s) => TOOLS.find((t) => t.slug === s)!);
   const toolLd = {
@@ -52,7 +52,7 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-video-downloader/')!;
 ---
 
 <Base
-  title="X (Twitter) Video Downloader — Save Videos & GIFs as MP4 | Free"
+  title="X (Twitter) Video Downloader — Save Videos & GIFs as MP4"
   description={seoDescription}
   path="/twitter-video-downloader/"
     jsonLd={[toolLd]}

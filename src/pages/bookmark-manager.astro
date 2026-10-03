@@ -28,7 +28,7 @@ const faq = [
   },
 ];
 
-  const seoDescription = "Collect X (Twitter) posts into a private bookmark library stored in your browser. Add from any tool or by URL, organise with tags and notes, export to JSON or Markdown. Free, no sign-up.";
+  const seoDescription = "Save X (Twitter) posts to a private bookmark library in your browser — tags, notes, search, JSON and Markdown export. Free, no sign-up, nothing leaves your device.";
 const tool = TOOLS.find((t) => t.slug === '/bookmark-manager/')!;
   const related = tool.related.map((s) => TOOLS.find((t) => t.slug === s)!);
   const toolLd = {
@@ -44,7 +44,7 @@ const tool = TOOLS.find((t) => t.slug === '/bookmark-manager/')!;
 ---
 
 <Base
-  title="Bookmark Manager — Save X Posts to a Private Local Library | Free"
+  title="X (Twitter) Bookmark Manager — Save Posts Locally, Free"
   description={seoDescription}
   path="/bookmark-manager/"
     jsonLd={[toolLd]}

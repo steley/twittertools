@@ -32,7 +32,7 @@ const faq = [
   },
 ];
 
-  const seoDescription = "Unroll any public X (Twitter) thread into one readable page. Copy it as plain text or AI-ready input, or export as Markdown, TXT, HTML or PDF. Free, no login required.";
+  const seoDescription = "Unroll any public X (Twitter) thread into one readable page — copy as plain text or AI-ready input, or export to Markdown, TXT, HTML or PDF. Free, no login.";
 const tool = TOOLS.find((t) => t.slug === '/twitter-thread-reader/')!;
   const related = tool.related.map((s) => TOOLS.find((t) => t.slug === s)!);
   const toolLd = {
@@ -48,7 +48,7 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-thread-reader/')!;
 ---
 
 <Base
-  title="X (Twitter) Thread Reader — Unroll & Export to PDF or Markdown | Free"
+  title="X (Twitter) Thread Reader — Unroll & Export PDF or Markdown"
   description={seoDescription}
   path="/twitter-thread-reader/"
     jsonLd={[toolLd]}

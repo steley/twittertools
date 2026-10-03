@@ -24,7 +24,7 @@ const faq = [
   },
 ];
 
-  const seoDescription = "Paste an X (Twitter) post URL or ID to extract the tweet ID, username, permalink and exact posting date. Works offline — dates are decoded from the Snowflake ID itself.";
+  const seoDescription = "Paste an X (Twitter) post URL or ID to extract the tweet ID, username, permalink and exact posting date. Works offline — dates decode from the Snowflake ID.";
 const tool = TOOLS.find((t) => t.slug === '/tweet-url-parser/')!;
   const related = tool.related.map((s) => TOOLS.find((t) => t.slug === s)!);
   const toolLd = {
@@ -40,7 +40,7 @@ const tool = TOOLS.find((t) => t.slug === '/tweet-url-parser/')!;
 ---
 
 <Base
-  title="Tweet URL & ID Parser — Extract ID, Username and Date | TwitterTools"
+  title="Tweet URL & ID Parser — Extract ID, Username and Date"
   description={seoDescription}
   path="/tweet-url-parser/"
     jsonLd={[toolLd]}
