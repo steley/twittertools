@@ -538,8 +538,12 @@ async def _try_syndication(session: ClientSession, tweet_id: str, token: Optiona
                 return 200, data
             # 200 + empty object = the post exists but X withholds its content
             # from logged-out visitors (sensitive / age-restricted media);
-            # keep it distinct from a transport failure
+            # keep it distinct from a transport failure. X also serves a
+            # tombstone payload in this situation (shape varies by region /
+            # whether a token was sent) — same meaning either way.
             if isinstance(data, dict) and not data:
+                return 200, {}
+            if isinstance(data, dict) and data.get("__typename") in ("TweetTombstone", "TweetUnavailable"):
                 return 200, {}
             return resp.status, None
     except (ClientError, asyncio.TimeoutError):

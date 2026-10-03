@@ -120,6 +120,8 @@ FIXTURES = {
 # sensitive / age-restricted post: the mock syndication endpoint answers this
 # ID with HTTP 200 + an empty object (see mock_syndication)
 RESTRICTED_ID = "1212121212121212121"
+# ...and this one with the tombstone variant of the same withholding
+TOMBSTONED_ID = "1919191919191919191"
 
 NOTE_FULL_TEXT = "the full body of the note, with a link https://t.co/ghlink"
 NOTE_URL_ENTITIES = [
@@ -137,6 +139,10 @@ async def mock_syndication(request):
         # how X serves sensitive / age-restricted posts to logged-out visitors:
         # HTTP 200 with an empty object
         return web.json_response({})
+    if tid == TOMBSTONED_ID:
+        # the same withholding, in the tombstone shape X serves when a token
+        # was sent (and in some regions) — must map to the same friendly 403
+        return web.json_response({"__typename": "TweetTombstone", "tombstone": {}})
     data = FIXTURES.get(tid)
     if data is None:
         return web.json_response({"detail": "No status found"}, status=404)
@@ -401,6 +407,15 @@ def run_checks():
     data = json.loads(body)
     check(
         "restricted thread -> explained 403",
+        code == 403 and "logged-in users" in data.get("error", ""),
+        f"{code} {body[:140]}",
+    )
+
+    # 4b. the tombstone shape of the same withholding maps to the same 403
+    code, _, body = get(f"/api/tweet?id={TOMBSTONED_ID}")
+    data = json.loads(body)
+    check(
+        "tombstoned post -> explained 403",
         code == 403 and "logged-in users" in data.get("error", ""),
         f"{code} {body[:140]}",
     )
