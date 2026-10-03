@@ -49,7 +49,7 @@ VIDEO_MEDIA = [
         "video_info": {
             "duration_millis": 63500,
             "variants": [
-                {"bitrate": 2176000, "content_type": "video/mp4", "url": "http://127.0.0.1:8899/video-2176.mp4"},
+                {"bitrate": 2176000, "content_type": "video/mp4", "url": "http://127.0.0.1:8899/video-2176.mp4?tag=12"},
                 {"bitrate": 832000, "content_type": "video/mp4", "url": "http://127.0.0.1:8899/video-832.mp4"},
                 {"content_type": "application/x-mpegURL", "url": "http://127.0.0.1:8899/playlist.m3u8"},
             ]
@@ -346,6 +346,11 @@ def run_checks():
     variants = media[0].get("variants", [])
     check("mp4 variants only", all(v["contentType"] == "video/mp4" for v in variants) and len(variants) == 2, str(variants))
     check("variants sorted desc", variants and variants[0]["bitrate"] >= variants[1]["bitrate"])
+    check(
+        "media tag stripped",
+        all("tag=" not in v["url"] for v in variants),
+        str(variants),
+    )
     check("duration passed through", media[0].get("durationMs") == 63500, str(media[0].get("durationMs")))
 
     # 2. photo tweet

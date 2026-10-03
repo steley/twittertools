@@ -45,7 +45,7 @@ from contextlib import suppress
 from collections import OrderedDict, defaultdict, deque
 from pathlib import Path
 from typing import Any, Deque, Dict, List, Optional, Tuple
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlsplit, urlunsplit
 
 from aiohttp import ClientError, ClientSession, ClientTimeout, web
 
@@ -91,9 +91,14 @@ GRAPHQL_QUERY_ID = os.environ.get("TT_GRAPHQL_QUERY_ID", "0hWvDhmW8YQ-S_ib3azIrw
 # the only way to walk a thread downward (syndication exposes just the parent
 # pointer). VERIFIED DEAD for guests on 2026-09-28 (404 on every known id, and
 # UserTweetsAndReplies/v1.1 search are closed too) — so the down-walk below is
-# env-gated off. If X ever re-opens guest conversation access, set
-# TT_THREAD_DOWNWALK=1 (+ override TT_TWEET_DETAIL_QUERY_ID if rotated) and the
-# thread reader unrolls full threads from ANY post again.
+# env-gated off. Re-checked 2026-10-01 with the cobalt-style
+# `Cookie: guest_id=v1:<token>` header: identical bare 404 from BOTH the VPS
+# and a proxy exit (garbage query ids return the same blank 404, while
+# activate.json on the same host works) — X blanks guest /graphql/* by IP
+# class, and the cookie does not revive it. If X ever re-opens guest
+# conversation access, set TT_THREAD_DOWNWALK=1 (+ override
+# TT_TWEET_DETAIL_QUERY_ID if rotated) and the thread reader unrolls full
+# threads from ANY post again.
 TWEET_DETAIL_QUERY_ID = os.environ.get("TT_TWEET_DETAIL_QUERY_ID", "xOhkmRac04YFZmOzU9PJHg")
 THREAD_DOWNWALK_ENABLED = os.environ.get("TT_THREAD_DOWNWALK", "0") == "1"
 THREAD_MAX_DETAIL_PAGES = 3  # each conversation page carries ~20 entries
@@ -852,11 +857,24 @@ async def collect_descendants(
 # Normalization                                                               #
 # --------------------------------------------------------------------------- #
 
+def _strip_media_tag(url: str) -> str:
+    """Drop X's internal `?tag=…` distribution marker from a media URL. It is
+    not needed to serve the file, its value varies with the API response that
+    handed out the URL (an effective leak-path watermark), and keeping it
+    would fragment the proxy's/CDN's cache keys. Same cleanup cobalt and
+    yt-dlp apply — the CDN returns the identical file without it."""
+    if "tag=" not in url:
+        return url
+    parts = urlsplit(url)
+    query = urlencode([(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k != "tag"])
+    return urlunsplit(parts._replace(query=query))
+
+
 def normalize_variant(v: dict) -> dict:
     return {
         "bitrate": v.get("bitrate"),
         "contentType": v.get("content_type", "application/octet-stream"),
-        "url": v.get("url", ""),
+        "url": _strip_media_tag(v.get("url", "")),
     }
 
 
@@ -878,7 +896,7 @@ def normalize_media(m: dict) -> dict:
     orig = sizes.get("large") or {}
     return {
         "type": mtype,
-        "url": m.get("media_url_https", ""),
+        "url": _strip_media_tag(m.get("media_url_https", "")),
         "width": orig.get("w"),
         "height": orig.get("h"),
         # duration lets the frontend derive each variant's file size
