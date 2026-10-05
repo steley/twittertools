@@ -25,8 +25,8 @@ Run
     python3 downloader_server.py            # listens on 127.0.0.1:8787
     PORT=8787 BIND=127.0.0.1 python3 downloader_server.py
 
-In production, nginx proxies twittertools.com/api/ to this service (see
-deploy/nginx-twittertools.conf). No third-party keys required.
+In production, Apache proxies twittertools.com/api/ to this service (see
+deploy/apache-twittertools.conf). No third-party keys required.
 
 NOTE: the syndication endpoint is free but has no SLA. The server tries
 several token algorithms (including the one react-tweet uses) and remembers
@@ -1178,10 +1178,7 @@ async def _collect_thread(
 def _safe_filename(name: str, url: str, content_type: str) -> str:
     candidate = (name or "").strip()
     if not candidate:
-        try:
-            candidate = url.split("?")[0].rstrip("/").split("/")[-1] or "media"
-        except Exception:
-            candidate = "media"
+        candidate = url.split("?")[0].rstrip("/").split("/")[-1] or "media"
     candidate = re.sub(r"[^A-Za-z0-9._-]+", "-", candidate).strip(".-")
     if not candidate or candidate.startswith("."):
         candidate = "media"

@@ -227,7 +227,8 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-thread-reader/')!;
 </Base>
 
 <script>
-  import { extractTweetId, fetchThread, fetchTweet, wireMediaImg, type TweetData } from '../lib/api';
+  import { extractTweetId, fetchThread, fetchTweet, saveText, wireMediaImg, type TweetData } from '../lib/api';
+  import { el, wireDeepLink } from '../lib/media-page';
   import { bookmarkToggleButton, type BookmarkItem } from '../lib/bookmark-store';
 
   const tabUrl = document.getElementById('tr-tab-url') as HTMLButtonElement;
@@ -306,12 +307,6 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-thread-reader/')!;
   setMode('url');
 
   // --- rendering -------------------------------------------------------------
-  const el = (tag: string, cls?: string): HTMLElement => {
-    const n = document.createElement(tag);
-    if (cls) n.className = cls;
-    return n;
-  };
-
   /** Posts included in exports (everything unless unticked). */
   function selected(): SimpleTweet[] {
     return thread.filter((t) => t.sel !== false);
@@ -942,18 +937,6 @@ footer a{color:#64748b}
 </style></head><body><h1>${esc(title)}</h1>${byline}${items}<footer>Unrolled with <a href="https://twittertools.com">TwitterTools</a> — the independent toolkit for X.</footer></body></html>`;
   }
 
-  function download(filename: string, content: string, type: string) {
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
-  }
-
   /** PDF export = the HTML export in a print-ready window; the browser's "Save as PDF" does the rest. */
   function pdfDoc(): string {
     const printCss = '<style>@page{margin:14mm}@media print{body{margin:1rem}}</style>';
@@ -980,13 +963,13 @@ footer a{color:#64748b}
           await navigator.clipboard.writeText(aiText());
           break;
         case 'txt':
-          download(`thread-${stamp}.txt`, plainText(), 'text/plain');
+          saveText(plainText(), `thread-${stamp}.txt`, 'text/plain');
           break;
         case 'mdfile':
-          download(`thread-${stamp}.md`, markdown(), 'text/markdown');
+          saveText(markdown(), `thread-${stamp}.md`, 'text/markdown');
           break;
         case 'html':
-          download(`thread-${stamp}.html`, htmlDoc(), 'text/html');
+          saveText(htmlDoc(), `thread-${stamp}.html`, 'text/html');
           break;
         case 'pdf': {
           const w = window.open('', '_blank');
@@ -1021,9 +1004,5 @@ footer a{color:#64748b}
   }
 
   // Deep link support (e.g. from the homepage router): /twitter-thread-reader?url=<post url>
-  const deepLink = new URLSearchParams(window.location.search).get('url');
-  if (deepLink && extractTweetId(deepLink)) {
-    urlInput.value = deepLink;
-    form.requestSubmit();
-  }
+  wireDeepLink(form, urlInput);
 </script>

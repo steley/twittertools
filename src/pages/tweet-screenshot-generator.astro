@@ -155,7 +155,7 @@ const tool = TOOLS.find((t) => t.slug === '/tweet-screenshot-generator/')!;
 <script>
   import { extractTweetId, fetchTweet, type TweetData } from '../lib/api';
   import { bookmarkToggleButton, tweetToBookmark } from '../lib/bookmark-store';
-  import { el, renderTweetHeader } from '../lib/media-page';
+  import { el, renderTweetHeader, wireDeepLink } from '../lib/media-page';
   import { downloadCard, renderThreadCard, renderTweetCard, type CardThemeName } from '../lib/tweet-card';
 
   const form = document.getElementById('ss-form') as HTMLFormElement;
@@ -334,11 +334,7 @@ const tool = TOOLS.find((t) => t.slug === '/tweet-screenshot-generator/')!;
   });
 
   // Deep link support (e.g. from the homepage router): /tool?url=<post url>
-  const deepLink = new URLSearchParams(window.location.search).get('url');
-  if (deepLink && extractTweetId(deepLink)) {
-    urlInput.value = deepLink;
-    form.requestSubmit();
-  }
+  wireDeepLink(form, urlInput);
 
   // Handoff from the Thread Reader ("Export as image"): a prefilled link list
   try {

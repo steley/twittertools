@@ -231,6 +231,23 @@ export function wireMediaImg(img: HTMLImageElement, mediaUrl: string, filename: 
   setTimeout(stalled, timeoutMs);
 }
 
+/** Trigger a client-side download of a blob, then release its object URL. */
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+/** Trigger a client-side download of a text payload. */
+export function saveText(content: string, filename: string, type: string): void {
+  saveBlob(new Blob([content], { type }), filename);
+}
+
 /** Try to save a media file straight from X's CDN via a CORS fetch (fast for
  * the user, no origin bandwidth). Resolves false when the CDN is unreachable
  * or blocked — callers should then fall back to the same-origin proxy. The
@@ -243,15 +260,7 @@ export async function downloadViaCdn(directUrl: string, filename: string, timeou
     const res = await fetch(directUrl, { signal: ctl.signal });
     clearTimeout(timer);
     if (!res.ok) return false;
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    saveBlob(await res.blob(), filename);
     return true;
   } catch {
     return false;

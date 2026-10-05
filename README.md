@@ -101,7 +101,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 ### 3. Serve it
 
 Point a web server at `dist/` and reverse-proxy `/api/` to `127.0.0.1:8787`.
-Ready-made vhost examples live in [`deploy/`](deploy/) for Apache and nginx.
+A ready-made Apache vhost example lives in [`deploy/`](deploy/).
 Two rules matter:
 
 - Point the document root at `dist/`, **never** at the repo root — that would

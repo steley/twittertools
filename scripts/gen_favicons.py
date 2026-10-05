@@ -4,7 +4,6 @@
 Outputs (into public/):
   favicon.ico            16/32/48 multi-resolution, for legacy tabs/bookmarks
   apple-touch-icon.png   180x180 full-bleed square (iOS adds its own mask)
-  icon-192.png / icon-512.png   Android/PWA sizes (handy if a manifest is added later)
 
 The mark: #1d9bf0 rounded square + white rounded "T". Original geometry,
 not derived from X Corp. brand assets. Edit the geometry below and re-run to
@@ -51,10 +50,7 @@ def main():
     touch.paste(master.resize((180, 180), Image.LANCZOS), (0, 0), master.resize((180, 180), Image.LANCZOS))
     touch.save("public/apple-touch-icon.png")
 
-    for px in (192, 512):
-        master.resize((px, px), Image.LANCZOS).save(f"public/icon-{px}.png")
-
-    print("wrote public/favicon.ico, public/apple-touch-icon.png, public/icon-192.png, public/icon-512.png")
+    print("wrote public/favicon.ico, public/apple-touch-icon.png")
 
 
 if __name__ == "__main__":

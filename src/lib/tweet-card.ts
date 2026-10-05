@@ -11,6 +11,7 @@ import {
   clearCdnDirectBlocked,
   markCdnDirectBlocked,
   proxiedDownloadUrl,
+  saveBlob,
   type MediaItem,
   type TweetData,
 } from './api';
@@ -416,26 +417,44 @@ export async function renderTweetCard(canvas: HTMLCanvasElement, t: TweetData, t
   ctx.lineTo(W - PAD, footY + 0.5);
   ctx.stroke();
 
-  // footer: date · engagement, watermark right
+  drawFooter(ctx, t, baseY, p);
+
+  ctx.restore();
+}
+
+function badge(ctx: CanvasRenderingContext2D, x: number, y: number, item: MediaItem, p: Palette) {
+  const label = item.type === 'animated_gif' ? 'GIF' : 'Video';
+  ctx.font = `600 12px ${FAMILY}`;
+  const w = ctx.measureText(label).width + 18;
+  rr(ctx, x, y, w, 22, 11);
+  ctx.fillStyle = p.badgeBg;
+  ctx.fill();
+  ctx.fillStyle = p.badgeText;
+  ctx.fillText(label, x + 9, y + 15);
+}
+
+/** Footer: date · engagement, watermark right. Shared by the single-tweet and
+ * thread cards — `post` is the main post either way. */
+function drawFooter(ctx: CanvasRenderingContext2D, post: TweetData, baseY: number, p: Palette) {
   ctx.fillStyle = p.muted;
   ctx.font = `400 13px ${FAMILY}`;
   let fx = PAD;
-  const date = fmtDate(t.createdAt);
+  const date = fmtDate(post.createdAt);
   if (date) {
     ctx.fillText(date, fx, baseY);
     fx += ctx.measureText(date).width + 14;
   }
   ctx.lineWidth = 1.4;
-  if (t.likes != null) {
+  if (post.likes != null) {
     heart(ctx, fx + 5, baseY - 10, 13, p.muted);
-    const s = String(t.likes);
+    const s = String(post.likes);
     ctx.fillStyle = p.muted;
     ctx.fillText(s, fx + 22, baseY);
     fx += 22 + ctx.measureText(s).width + 14;
   }
-  if (t.replies != null) {
+  if (post.replies != null) {
     bubble(ctx, fx + 5, baseY - 10, 13, p.muted);
-    const s = String(t.replies);
+    const s = String(post.replies);
     ctx.fillStyle = p.muted;
     ctx.fillText(s, fx + 22, baseY);
   }
@@ -450,19 +469,6 @@ export async function renderTweetCard(canvas: HTMLCanvasElement, t: TweetData, t
   ctx.font = `400 13px ${FAMILY}`;
   ctx.fillStyle = p.muted;
   ctx.fillText(wmA, bX - ctx.measureText(wmA).width, baseY);
-
-  ctx.restore();
-}
-
-function badge(ctx: CanvasRenderingContext2D, x: number, y: number, item: MediaItem, p: Palette) {
-  const label = item.type === 'animated_gif' ? 'GIF' : 'Video';
-  ctx.font = `600 12px ${FAMILY}`;
-  const w = ctx.measureText(label).width + 18;
-  rr(ctx, x, y, w, 22, 11);
-  ctx.fillStyle = p.badgeBg;
-  ctx.fill();
-  ctx.fillStyle = p.badgeText;
-  ctx.fillText(label, x + 9, y + 15);
 }
 
 // --- thread variant -------------------------------------------------------------
@@ -677,39 +683,8 @@ export async function renderThreadCard(
   ctx.lineTo(W - PAD, footY + 0.5);
   ctx.stroke();
 
-  ctx.fillStyle = p.muted;
-  ctx.font = `400 13px ${FAMILY}`;
-  let fx = PAD;
-  const date = fmtDate(mainBlock.post.createdAt);
-  if (date) {
-    ctx.fillText(date, fx, baseY);
-    fx += ctx.measureText(date).width + 14;
-  }
-  ctx.lineWidth = 1.4;
-  if (mainBlock.post.likes != null) {
-    heart(ctx, fx + 5, baseY - 10, 13, p.muted);
-    const s = String(mainBlock.post.likes);
-    ctx.fillStyle = p.muted;
-    ctx.fillText(s, fx + 22, baseY);
-    fx += 22 + ctx.measureText(s).width + 14;
-  }
-  if (mainBlock.post.replies != null) {
-    bubble(ctx, fx + 5, baseY - 10, 13, p.muted);
-    const s = String(mainBlock.post.replies);
-    ctx.fillStyle = p.muted;
-    ctx.fillText(s, fx + 22, baseY);
-  }
-
-  const wmA = 'made with ';
-  const wmB = 'twittertools.com';
-  ctx.font = `600 13px ${FAMILY}`;
-  const bWidth = ctx.measureText(wmB).width;
-  const bX = W - PAD - bWidth;
-  ctx.fillStyle = BRAND;
-  ctx.fillText(wmB, bX, baseY);
-  ctx.font = `400 13px ${FAMILY}`;
-  ctx.fillStyle = p.muted;
-  ctx.fillText(wmA, bX - ctx.measureText(wmA).width, baseY);
+  // footer: date/engagement/watermark of the main post
+  drawFooter(ctx, mainBlock.post, baseY, p);
 
   ctx.restore();
 }
@@ -724,14 +699,7 @@ export function downloadCard(canvas: HTMLCanvasElement, filename: string): Promi
           resolve(false);
           return;
         }
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 5000);
+        saveBlob(blob, filename);
         resolve(true);
       }, 'image/png');
     } catch {

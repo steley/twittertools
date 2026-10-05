@@ -70,9 +70,15 @@ export function wireFetcher(o: FetcherOptions): void {
   });
 
   // Deep link support (e.g. from the homepage router): /tool?url=<post url>
+  wireDeepLink(o.form, o.input);
+}
+
+/** Auto-submit the tool's form when opened as /tool?url=<post url>
+ * (the homepage router links tools that way). */
+export function wireDeepLink(form: HTMLFormElement, input: HTMLInputElement | HTMLTextAreaElement): void {
   const deepLink = new URLSearchParams(window.location.search).get('url');
   if (deepLink && extractTweetId(deepLink)) {
-    o.input.value = deepLink;
-    o.form.requestSubmit();
+    input.value = deepLink;
+    form.requestSubmit();
   }
 }
