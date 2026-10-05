@@ -66,7 +66,7 @@ try {
     const pwa = await page.evaluate(async () => {
       const m = await fetch('/manifest.webmanifest');
       const sw = await fetch('/bookmark-manager/sw.js');
-      const i192 = await fetch('/icons/bm-192.png');
+      const i192 = await fetch('/bookmark-manager/icons/bm-192.png');
       return { m: m.status, sw: sw.status, i192: i192.status };
     });
     if (pwa.m === 200 && pwa.sw === 200 && pwa.i192 === 200) console.log('  ok  pwa assets served (manifest, sw, icon)');

@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
-"""Generate the Bookmark Manager PWA icons into public/icons/: a white
-bookmark ribbon on the brand-blue rounded square, plus a maskable variant
-with the glyph inside the 80% safe zone."""
+"""Generate the Bookmark Manager PWA icons into public/bookmark-manager/icons/
+(a path Apache's stock /icons/ alias can't shadow): a white bookmark ribbon on
+the brand-blue rounded square, plus a maskable variant with the glyph inside
+the 80% safe zone."""
 
 from pathlib import Path
 
@@ -9,7 +10,7 @@ from PIL import Image, ImageDraw
 
 BRAND = (29, 155, 240, 255)   # #1d9bf0
 WHITE = (255, 255, 255, 255)
-OUT = Path(__file__).resolve().parent.parent / "public" / "icons"
+OUT = Path(__file__).resolve().parent.parent / "public" / "bookmark-manager" / "icons"
 
 
 def ribbon(size: int, scale: float) -> Image.Image:
