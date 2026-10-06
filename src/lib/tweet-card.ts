@@ -15,6 +15,7 @@ import {
   type MediaItem,
   type TweetData,
 } from './api';
+import { splitReplyMention } from './thread-text';
 
 export type CardThemeName = 'light' | 'dark';
 
@@ -311,8 +312,14 @@ export async function renderTweetCard(canvas: HTMLCanvasElement, t: TweetData, t
   const mediaItems = t.media.slice(0, 4);
   const mediaImgs = await Promise.all(mediaItems.map((m) => loadImage(m.url)));
 
+  // X-style reply treatment (same rule as the thread reader): a reply's
+  // leading @mention of the account it answers is stripped and surfaced as
+  // a muted "Replying to" line
+  const { text: bareText, mention } = splitReplyMention(t.text, t.user?.screenName, !!t.replyToId);
+  const replyingTo = mention ? '@' + mention : null;
+
   // measure
-  const bodyText = stripTrailingMediaLink(t.text, mediaItems.length > 0);
+  const bodyText = stripTrailingMediaLink(bareText, mediaItems.length > 0);
   ctx.font = `${TEXT_SIZE}px ${FAMILY}`;
   const lines = bodyText ? wrapText(ctx, bodyText, W - PAD * 2) : [''];
   const aspects = mediaItems.map((m, i) => {
@@ -323,7 +330,7 @@ export async function renderTweetCard(canvas: HTMLCanvasElement, t: TweetData, t
   const media = tileImages(mediaItems.length, W, aspects);
   const hasMedia = mediaItems.length > 0;
   const headH = Math.max(AVATAR, 24);
-  const textH = lines.length * LINE_H;
+  const textH = (replyingTo ? 16 : 0) + lines.length * LINE_H;
   const contentBottom = PAD + headH + 14 + textH + (hasMedia ? 14 + media.height : 0);
   const urlBase = contentBottom + 20; // permalink line below the media / text
   const footY = urlBase + 13;
@@ -378,7 +385,12 @@ export async function renderTweetCard(canvas: HTMLCanvasElement, t: TweetData, t
   ctx.fillText('@' + (t.user?.screenName || 'unknown'), nameX, avY + 37);
 
   // body text
-  let y = PAD + headH + 14 + TEXT_SIZE - 4;
+  let y = PAD + headH + 14 + TEXT_SIZE - 4 + (replyingTo ? 16 : 0);
+  if (replyingTo) {
+    ctx.fillStyle = p.muted;
+    ctx.font = '400 13px ' + FAMILY;
+    ctx.fillText('Replying to ' + replyingTo, nameX, avY + 55);
+  }
   ctx.fillStyle = p.text;
   ctx.font = `${TEXT_SIZE}px ${FAMILY}`;
   for (const line of lines) {
@@ -496,22 +508,14 @@ async function measurePost(ctx: CanvasRenderingContext2D, post: TweetData, paren
     : null;
   const mediaItems = post.media.slice(0, 4);
   const mediaImgs = await Promise.all(mediaItems.map((m) => loadImage(m.url)));
-  // X-style reply treatment: a reply aimed at the parent author drops the
-  // leading @mention from the text and surfaces it as a muted label instead
-  let replyingTo: string | null = null;
-  let body = post.text ?? '';
-  const parentHandle = parent?.user?.screenName;
-  const selfReply =
-    !parentHandle ||
-    !post.user?.screenName ||
-    post.user.screenName.toLowerCase() === parentHandle.toLowerCase();
-  if (!selfReply) {
-    const m = body.match(/^@([A-Za-z0-9_]+)\s+/);
-    if (m && m[1].toLowerCase() === parentHandle!.toLowerCase()) {
-      replyingTo = '@' + parentHandle;
-      body = body.slice(m[0].length);
-    }
-  }
+  // X-style reply treatment, same rule as the thread reader: a reply's
+  // leading @mention of the account it answers (the composer prefill) is
+  // stripped from the text and surfaced as a muted "Replying to" line.
+  // Card replies (parent passed) are replies by construction; the main post
+  // counts as one when X says it is (replyToId).
+  const isReply = parent !== undefined || !!post.replyToId;
+  const { text: body, mention } = splitReplyMention(post.text ?? '', post.user?.screenName, isReply);
+  const replyingTo = mention ? '@' + mention : null;
   const bodyText = stripTrailingMediaLink(body, mediaItems.length > 0);
   ctx.font = `${TEXT_SIZE}px ${FAMILY}`;
   const lines = bodyText ? wrapText(ctx, bodyText, W - PAD * 2) : [];
@@ -618,8 +622,8 @@ export async function renderThreadCard(
 
   const mainBlock = await measurePost(ctx, main);
   // each reply's parent is the PREVIOUS post in the card, not the main post —
-  // a reply-to-a-reply mentions the reply above it, and that mention is the
-  // one turned into the muted "Replying to" line
+  // replies count as replies by construction, and the leading mention they
+  // open with becomes the muted "Replying to" line
   const replyBlocks: PostBlock[] = [];
   let prev = mainBlock.post;
   for (const r of replies) {

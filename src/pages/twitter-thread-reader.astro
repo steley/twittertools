@@ -229,6 +229,7 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-thread-reader/')!;
 <script>
   import { extractTweetId, fetchThread, fetchTweet, saveText, wireMediaImg, type TweetData } from '../lib/api';
   import { el, wireDeepLink } from '../lib/media-page';
+  import { stripReplyMention } from '../lib/thread-text';
   import { bookmarkToggleButton, type BookmarkItem } from '../lib/bookmark-store';
 
   const tabUrl = document.getElementById('tr-tab-url') as HTMLButtonElement;
@@ -592,6 +593,12 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-thread-reader/')!;
 
   function adoptTweets(tweets: TweetData[]) {
     thread = tweets.map(toSimple);
+    // X hides a reply's leading @mention of the account it answers; the
+    // syndication text still carries it, so drop it here — reading, exports
+    // and the saved snapshot all share this text
+    thread.forEach((t, i) => {
+      t.text = stripReplyMention(t.text, t.handle, i > 0 || !!tweets[i].replyToId);
+    });
     const first = tweets[0];
     threadTitle = first?.article
       ? (first.text.split('\n')[0] ?? 'Article')
@@ -606,9 +613,9 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-thread-reader/')!;
         url: first.url,
         author: first.user?.name ?? '',
         handle: first.user?.screenName ?? '',
-        text: tweets.map((p) => p.text).join('\n\n'),
+        text: thread.map((p) => p.text).join('\n\n'),
         mediaType: first.article ? 'article' : 'thread',
-        posts: tweets.map((p) => p.text),
+        posts: thread.map((p) => p.text),
         thumb: firstPostThumb(tweets),
         savedAt: Date.now(),
         tags: [],

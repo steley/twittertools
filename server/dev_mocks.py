@@ -26,9 +26,10 @@ async def mock_syndication(request):
         # restricted (sensitive / age-restricted): X answers 200 + empty object
         "1212121212121212121": {},
         # reply from a DIFFERENT author that opens with @mockuser — exercises
-        # the screenshot thread card's "Replying to" treatment
+        # the "Replying to" treatment (screenshot card and thread reader)
         "1313131313131313131": tweet_obj(
-            "1313131313131313131", "@mockuser Couldn't agree more — she earned it.", "otheruser"
+            "1313131313131313131", "@mockuser Couldn't agree more — she earned it.", "otheruser",
+            reply_to="222222222222222222",
         ),
         # reply-to-a-reply: mentions the PREVIOUS reply's author (otheruser),
         # not the main post's — exercises the chain-parent mention strip

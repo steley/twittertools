@@ -157,6 +157,7 @@ const tool = TOOLS.find((t) => t.slug === '/tweet-screenshot-generator/')!;
   import { bookmarkToggleButton, tweetToBookmark } from '../lib/bookmark-store';
   import { el, renderTweetHeader, wireDeepLink } from '../lib/media-page';
   import { downloadCard, renderThreadCard, renderTweetCard, type CardThemeName } from '../lib/tweet-card';
+  import { stripReplyMention } from '../lib/thread-text';
 
   const form = document.getElementById('ss-form') as HTMLFormElement;
   const urlInput = document.getElementById('ss-url') as HTMLTextAreaElement;
@@ -244,7 +245,6 @@ const tool = TOOLS.find((t) => t.slug === '/tweet-screenshot-generator/')!;
     const label = el('p', 'text-xs font-medium text-slate-500');
     label.textContent = 'Replies included in the card — untick to drop:';
     wrap.appendChild(label);
-    let prevHandle = main.user?.screenName ?? '';
     replies.forEach((r) => {
       const row = el('label', 'mt-3 flex cursor-pointer items-start gap-3');
       const cb = document.createElement('input');
@@ -262,14 +262,11 @@ const tool = TOOLS.find((t) => t.slug === '/tweet-screenshot-generator/')!;
       const name = el('p', 'truncate text-sm font-medium text-slate-800');
       name.textContent = `${r.user?.name ?? 'Unknown'} @${r.user?.screenName ?? '?'}`;
       const text = el('p', 'mt-0.5 line-clamp-1 text-xs text-slate-500');
-      // mirror the card: strip a leading mention of the PREVIOUS post's author
-      const self = !prevHandle || !r.user?.screenName || r.user.screenName.toLowerCase() === prevHandle.toLowerCase();
-      const m = self ? null : r.text.match(new RegExp(`^@${prevHandle}\\s+`, 'i'));
-      text.textContent = m ? r.text.slice(m[0].length) : r.text;
+      // mirror the card: same reply-mention rule as tweet-card
+      text.textContent = stripReplyMention(r.text, r.user?.screenName, true);
       who.append(name, text);
       row.appendChild(who);
       wrap.appendChild(row);
-      prevHandle = r.user?.screenName ?? prevHandle;
     });
     tweetBox.appendChild(wrap);
   }
