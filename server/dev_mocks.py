@@ -31,6 +31,14 @@ async def mock_syndication(request):
             "1313131313131313131", "@mockuser Couldn't agree more — she earned it.", "otheruser",
             reply_to="222222222222222222",
         ),
+        # real-world mixed CJK+Latin paragraph: the CJK-aware wrap must keep
+        # "CPU time" and "@keking99" whole and break between Chinese chars
+        "1414141414141414141": tweet_obj(
+            "1414141414141414141",
+            "3. Workers\nCloudflare Workers计费分两块：Requests和CPU time，这两部分都可能爆单。"
+            "比如@keking99最近的1000刀账单就主要来自海量Requests，而我自己之前则是被CPU time搞过。",
+            "mcwangcn",
+        ),
         # reply-to-a-reply: mentions the PREVIOUS reply's author (otheruser),
         # not the main post's — exercises the chain-parent mention strip
         "1515151515151515151": tweet_obj(

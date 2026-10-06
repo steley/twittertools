@@ -218,35 +218,106 @@ async function loadImage(url: string): Promise<HTMLImageElement | null> {
 
 // --- layout ---------------------------------------------------------------------
 
-function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+// CJK chars and fullwidth punctuation may break between any two neighbors
+// (X wraps the same way); Latin runs never split mid-word.
+const CJK_RE = /[\u2E80-\u2EFF\u3000-\u303F\u31C0-\u31EF\u3400-\u4DBF\u4E00-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF\uFF00-\uFFEF]/;
+const ATOM_RE = new RegExp(
+  `${CJK_RE.source}|[^\\s${CJK_RE.source.slice(1, -1)}]+| +`,
+  'g',
+);
+// closing punctuation must not start a line — it binds to the previous atom
+const NO_LINE_START = /^[’”）\]｝》〉】」』，。、．：；？！…—～·％%]$/;
+// short space-joined Latin runs stay unbreakable so phrases like "CPU time"
+// move to the next line whole; longer runs fall back to per-word breaks
+const GLUE_MAX = 24;
+
+const isLatinAtom = (s: string) => s !== '' && !/^\s/.test(s) && !CJK_RE.test(s);
+
+/** Paragraph → atoms: one per CJK char, whole Latin runs (handles, URLs,
+ * amounts), and Latin words glued through single spaces while short. */
+function atomsOf(para: string): string[] {
+  const raw = para.match(ATOM_RE) ?? [];
+  const atoms: string[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const prev = atoms[atoms.length - 1];
+    if (
+      raw[i] === ' ' && prev !== undefined && isLatinAtom(prev) &&
+      i + 1 < raw.length && isLatinAtom(raw[i + 1]) &&
+      prev.length + 1 + raw[i + 1].length <= GLUE_MAX
+    ) {
+      atoms[atoms.length - 1] = `${prev} ${raw[i + 1]}`;
+      i++;
+      continue;
+    }
+    atoms.push(raw[i]);
+  }
+  return atoms;
+}
+
+export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
   const lines: string[] = [];
+  const fits = (s: string) => ctx.measureText(s).width <= maxWidth;
+  const flush = (lineAtoms: string[]) => {
+    const t = lineAtoms.join('').replace(/ +$/, '');
+    if (t) lines.push(t);
+  };
+  // hard-break an atom too wide for a line on its own (long URLs)
+  const sliceInto = (atom: string) => {
+    let rest = atom;
+    while (rest && !fits(rest)) {
+      let cut = rest.length;
+      while (cut > 1 && !fits(rest.slice(0, cut))) cut--;
+      lines.push(rest.slice(0, cut));
+      rest = rest.slice(cut);
+    }
+    return rest;
+  };
+
   for (const para of text.split('\n')) {
     if (para.trim() === '') {
       lines.push('');
       continue;
     }
-    let cur = '';
-    for (let word of para.split(' ')) {
-      // hard-break tokens that alone exceed the line (long URLs, CJK runs)
-      while (ctx.measureText(word).width > maxWidth) {
-        if (cur) {
-          lines.push(cur);
-          cur = '';
+    const queue = atomsOf(para);
+    let lineAtoms: string[] = [];
+    for (let i = 0; i < queue.length; i++) {
+      const atom = queue[i];
+      if (/^ +$/.test(atom)) {
+        if (lineAtoms.length && lineAtoms[lineAtoms.length - 1] !== ' ') lineAtoms.push(' ');
+        continue;
+      }
+      if (fits(lineAtoms.join('') + atom)) {
+        lineAtoms.push(atom);
+        continue;
+      }
+      // doesn't fit: a glued phrase that fits on a fresh line moves down
+      // whole ("CPU time" stays together); only a run too wide for a line
+      // on its own falls back to per-word breaks
+      if (atom.includes(' ')) {
+        if (fits(atom)) {
+          flush(lineAtoms);
+          lineAtoms = [atom];
+          continue;
         }
-        let cut = word.length;
-        while (cut > 1 && ctx.measureText(word.slice(0, cut)).width > maxWidth) cut--;
-        lines.push(word.slice(0, cut));
-        word = word.slice(cut);
+        const words = atom.split(' ').flatMap((w, j) => (j ? [' ', w] : [w]));
+        queue.splice(i + 1, 0, ...words);
+        continue;
       }
-      if (!word) continue;
-      const cand = cur ? `${cur} ${word}` : word;
-      if (ctx.measureText(cand).width <= maxWidth || !cur) cur = cand;
-      else {
-        lines.push(cur);
-        cur = word;
+      if (NO_LINE_START.test(atom) && lineAtoms.length) {
+        // kinsoku: pull the previous atom down so the mark keeps its word —
+        // the pair may hang past the measure, bounded by one mark
+        while (lineAtoms[lineAtoms.length - 1] === ' ') lineAtoms.pop();
+        const last = lineAtoms.pop();
+        if (last !== undefined) {
+          flush(lineAtoms);
+          lineAtoms = [last, atom];
+          continue;
+        }
       }
+      flush(lineAtoms);
+      lineAtoms = fits(atom) ? [atom] : [sliceInto(atom)].filter(Boolean);
     }
-    if (cur) lines.push(cur);
+    flush(lineAtoms);
   }
   return lines;
 }
