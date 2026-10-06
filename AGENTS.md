@@ -2,6 +2,17 @@
 
 Notes for AI coding agents working in this repository.
 
+## CLI Tools
+
+When available, prefer:
+
+- `rg` for content search
+- `fd` for file discovery
+- `bat` for human-readable source inspection
+- `fzf` for interactive selection
+
+These are preferences, not hard requirements.
+
 ## Before every push
 
 Run the incremental delegate review and fix anything critical/high it surfaces
@@ -16,6 +27,7 @@ agent does the reading.
 
 ## Conventions
 
+- 编辑文件前必须先读取该文件。
 - Astro 5 static site + one tiny aiohttp backend. Deployment is manual:
   rsync `dist/` (and `server/` + `systemctl restart twittertools-api` whenever
   server code changes), served behind Cloudflare.
@@ -28,6 +40,9 @@ agent does the reading.
   (notx.com, foo-x.com) must not parse as x.com.
 - Checks: `npx astro check`, `npx vitest run` (frontend); `python -m pyflakes
   downloader_server.py mock_test.py dev_mocks.py dev_proxy.py` and
-  `python mock_test.py` (backend, offline); `node scripts/smoke.mjs` (full
-  stack, see the smoke job in `.github/workflows/ci.yml` for the local mock
-  setup).
+  `python mock_test.py` (backend, offline, run from `server/`);
+  `node scripts/smoke.mjs` (full stack, see the smoke job in
+  `.github/workflows/ci.yml` for the local mock setup).
+
+## Proxy
+网络不可用时，使用代理 `127.0.0.1:1089`，优先使用 `socks5` 和 `https`。
