@@ -733,10 +733,10 @@ export async function renderThreadCard(
 
   const mainDrawn = drawPostBody(ctx, mainBlock, PAD, p, AVATAR);
 
-  // main post permalink, then divider (protocol stripped for a cleaner look)
+  // main post permalink, then divider — same "https://…" form as the single card
   ctx.fillStyle = p.muted;
   ctx.font = `400 13px ${FAMILY}`;
-  const permalink = (mainBlock.post.url || `https://x.com/i/status/${mainBlock.post.id}`).replace(/^https:\/\//, '');
+  const permalink = mainBlock.post.url || `https://x.com/i/status/${mainBlock.post.id}`;
   ctx.fillText(permalink, PAD, mainDrawn + 20);
   let divider = mainDrawn + 33;
 
