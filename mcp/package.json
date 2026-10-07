@@ -1,6 +1,6 @@
 {
   "name": "twittertools-mcp",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "mcpName": "io.github.steley/twittertools-mcp",
   "description": "MCP server for twittertools.com — fetch X (Twitter) posts and threads, count and split posts with X's real rules. No login, no tracking.",
   "license": "MIT",

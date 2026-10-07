@@ -29,7 +29,7 @@ import {
 } from "./xrules.js";
 
 const NAME = "twittertools";
-const VERSION = "1.2.1"; // keep in sync with package.json
+const VERSION = "1.2.2"; // keep in sync with package.json
 // Protocol versions this server can honestly claim: across these revisions the
 // four verbs used here (initialize, tools/list, tools/call, ping) kept their
 // shapes, and the additions (icons, tasks, elicitation, …) are all optional
@@ -56,15 +56,18 @@ const TOOLS = [
     description:
       "Fetch one public X (Twitter) post by URL or ID: text, author, engagement counts, " +
       "and media with direct CDN URLs (photos, or MP4 video variants sorted by quality). " +
-      "Deleted, protected, or age-restricted posts are not available without an X login.",
+      "Use for a specific post the user links or cites — not for searching X, timelines, " +
+      "bookmarks, or DMs. Deleted, protected, or age-restricted posts are not available " +
+      "without an X login.",
     inputSchema: urlOrIdSchema,
   },
   {
     name: "get_thread",
     description:
-      "Unroll a public X thread into its posts in order. Expensive upstream — call sparingly, " +
-      "and prefer pasting the thread's LAST post, which returns the whole chain. Results may " +
-      "be partial; the response says so when they are.",
+      "Unroll a public X thread into its posts in order. For a single post, use get_tweet " +
+      "instead. Expensive upstream — call sparingly, and prefer pasting the thread's LAST " +
+      "post, which returns the whole chain. Results may be partial; the response says so " +
+      "when they are.",
     inputSchema: urlOrIdSchema,
   },
   {
