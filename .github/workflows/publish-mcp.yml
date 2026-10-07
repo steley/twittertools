@@ -1,0 +1,71 @@
+name: Publish MCP
+
+# Bump the version in BOTH mcp/package.json and mcp/server.json (+ VERSION in
+# mcp/server.js), push, and this workflow publishes npm and the official MCP
+# Registry. npm needs its Trusted Publisher configured once on npmjs.com:
+# package twittertools-mcp -> Settings -> Trusted Publishing -> this repo/workflow.
+
+on:
+  push:
+    branches: [main]
+    paths: [mcp/**, .github/workflows/publish-mcp.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # npm trusted publishing + registry github-oidc login
+
+concurrency:
+  group: publish-mcp
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: npm + MCP Registry
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      # node 22 ships npm 10; OIDC trusted publishing needs npm >= 11.5
+      - run: npm install -g npm@latest
+      - run: npm ci
+
+      - id: npm
+        name: Publish to npm (skip when this version already exists)
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "twittertools-mcp@${VERSION}" version >/dev/null 2>&1; then
+            echo "twittertools-mcp@${VERSION} is already on npm — skipping"
+            echo "published=false" >> "$GITHUB_OUTPUT"
+          else
+            npm publish --provenance --access public
+            echo "published=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install mcp-publisher
+        run: |
+          curl -fsSL -o /tmp/mcp-publisher.tgz \
+            https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz
+          mkdir -p "$HOME/.local/bin"
+          tar -xzf /tmp/mcp-publisher.tgz -C "$HOME/.local/bin" mcp-publisher
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Publish to the official MCP Registry (when the version moved)
+        env:
+          NPM_PUBLISHED: ${{ steps.npm.outputs.published }}
+        run: |
+          LOCAL=$(node -p "JSON.parse(require('fs').readFileSync('server.json','utf8')).version")
+          REMOTE=$(curl -fsSL "https://registry.modelcontextprotocol.io/v0.1/servers?search=twittertools-mcp" \
+            | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);const s=(j.servers||[]).map(e=>e.server).find(s=>s.name==='io.github.steley/twittertools-mcp');console.log((s&&s.version)||'')})")
+          if [ "$NPM_PUBLISHED" = "true" ] || [ "$LOCAL" != "$REMOTE" ]; then
+            mcp-publisher login github-oidc
+            mcp-publisher publish
+          else
+            echo "Registry already lists version ${LOCAL} — skipping"
+          fi
