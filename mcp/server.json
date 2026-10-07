@@ -2,7 +2,7 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.steley/twittertools-mcp",
   "title": "TwitterTools MCP",
-  "description": "Fetch public X (Twitter) posts and threads, and count or split text with X's real rules. No login, no tracking, no API keys.",
+  "description": "Fetch public X posts and threads; count and split text with X's real rules. No login, no tracking.",
   "websiteUrl": "https://twittertools.com",
   "repository": {
     "url": "https://github.com/steley/twittertools",
