@@ -33,8 +33,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # node 22 ships npm 10; OIDC trusted publishing needs npm >= 11.5
-      - run: npm install -g npm@latest
+      # node 22 bundles npm 10, which can't do OIDC trusted publishing;
+      # pin major 11 (>= 11.5 has it) so a future npm major can't break CI
+      - run: npm install -g npm@11
       - run: npm ci
 
       - id: npm
