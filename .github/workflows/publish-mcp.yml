@@ -1,9 +1,10 @@
 name: Publish MCP
 
 # Bump the version in BOTH mcp/package.json and mcp/server.json (+ VERSION in
-# mcp/server.js), push, and this workflow publishes npm and the official MCP
-# Registry. npm needs its Trusted Publisher configured once on npmjs.com:
-# package twittertools-mcp -> Settings -> Trusted Publishing -> this repo/workflow.
+# mcp/server.js), run `npm install` in mcp/ to sync the lockfile, push, and
+# this workflow publishes npm and the official MCP Registry. npm needs its
+# Trusted Publisher configured once on npmjs.com: package twittertools-mcp ->
+# Settings -> Trusted Publishing -> this repo/workflow.
 
 on:
   push:
