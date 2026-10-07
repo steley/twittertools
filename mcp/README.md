@@ -20,6 +20,10 @@ API, which resolves public posts through X's free syndication endpoint. The othe
 three run entirely offline. Media is **not** proxied: tweet results carry the
 direct `pbs.twimg.com` / `video.twimg.com` URLs, which any client can fetch on its own.
 
+The package has **zero dependencies**: the MCP protocol layer is hand-rolled
+(line-delimited JSON-RPC over stdio), so the entire supply-chain surface is the
+couple hundred lines in this directory — verifiable against Socket or any scanner.
+
 ## Install
 
 ```sh

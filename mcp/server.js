@@ -12,11 +12,14 @@
  * direct pbs.twimg.com / video.twimg.com URLs, which any client can fetch.
  *
  * Set TWITTERTOOLS_API_BASE to point at a self-hosted instance.
+ *
+ * The MCP protocol layer below is hand-rolled on purpose: the official SDK
+ * pulls an HTTP-server dependency tree (express, hono, ajv, cross-spawn, …)
+ * into a stdio-only package. A tools-only server needs exactly four verbs,
+ * implemented against the line-delimited JSON-RPC 2.0 framing of the MCP
+ * stdio transport — pinned by the vitest suite in test/.
  */
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { ListToolsRequestSchema, CallToolRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import {
   countTweet,
   splitThread,
@@ -26,7 +29,7 @@ import {
 } from "./xrules.js";
 
 const NAME = "twittertools";
-const VERSION = "1.0.2"; // keep in sync with package.json
+const VERSION = "1.1.0"; // keep in sync with package.json
 const API_BASE = (process.env.TWITTERTOOLS_API_BASE || "https://twittertools.com").replace(/\/+$/, "");
 const ATTRIBUTION = "\n\nvia twittertools.com";
 const TEXT_INPUT_MAX = 100_000; // generous, but caps local work per call
@@ -154,7 +157,7 @@ async function callTool(name, args) {
     case "get_thread": {
       const data = await callApi("thread", { url: strArg(args, "url_or_id") });
       if (!data?.tweets) throw new Error("twittertools API returned no thread");
-      const head = data?.partial
+      const head = data.partial
         ? `Note: this thread result is PARTIAL (${data.reason || "incomplete"}) — posts may be missing.\n\n`
         : "";
       return textResult(head + JSON.stringify({ count: data.tweets.length, tweets: data.tweets }, null, 2) + ATTRIBUTION);
@@ -190,17 +193,85 @@ async function callTool(name, args) {
   }
 }
 
-const server = new Server({ name: NAME, version: VERSION }, { capabilities: { tools: {} } });
+// --------------------------------------------------------------------------- //
+// Line-delimited JSON-RPC 2.0 over stdio (MCP stdio transport)                 //
+// --------------------------------------------------------------------------- //
 
-server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
+function send(msg) {
+  process.stdout.write(JSON.stringify(msg) + "\n");
+}
 
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
+function sendResult(id, result) {
+  send({ jsonrpc: "2.0", id, result });
+}
+
+function sendError(id, code, message) {
+  send({ jsonrpc: "2.0", id, error: { code, message } });
+}
+
+async function dispatch(msg) {
+  const { method, id, params } = msg;
+  const isRequest = "id" in msg;
   try {
-    return await callTool(name, args);
+    switch (method) {
+      case "initialize":
+        // echo the client's requested version: every current client accepts
+        // its own, and we make no use of newer protocol features
+        sendResult(id, {
+          protocolVersion: params?.protocolVersion || "2024-11-05",
+          capabilities: { tools: {} },
+          serverInfo: { name: NAME, version: VERSION },
+        });
+        return;
+      case "notifications/initialized":
+        return; // notification — no response
+      case "tools/list":
+        sendResult(id, { tools: TOOLS });
+        return;
+      case "tools/call":
+        // tool execution failures are tool results (isError), not protocol
+        // errors — matches how every client renders a failed tool call
+        try {
+          sendResult(id, await callTool(params?.name, params?.arguments));
+        } catch (e) {
+          sendResult(id, textResult(`Error: ${e?.message || String(e)}`, { error: true }));
+        }
+        return;
+      case "ping":
+        sendResult(id, {});
+        return;
+      default:
+        // unknown notifications are silently ignored per JSON-RPC 2.0
+        if (isRequest) sendError(id, -32601, `Method not found: ${method}`);
+    }
   } catch (e) {
-    return textResult(`Error: ${e?.message || String(e)}`, { error: true });
+    if (isRequest) sendError(id, -32603, `Internal error: ${e?.message || String(e)}`);
+  }
+}
+
+let buffer = "";
+process.stdin.setEncoding("utf8");
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let i;
+  while ((i = buffer.indexOf("\n")) >= 0) {
+    const line = buffer.slice(0, i).trim();
+    buffer = buffer.slice(i + 1);
+    if (!line) continue;
+    let msg;
+    try {
+      msg = JSON.parse(line);
+    } catch {
+      sendError(null, -32700, "Parse error");
+      continue;
+    }
+    if (!msg || typeof msg !== "object" || typeof msg.method !== "string") {
+      if (msg && typeof msg === "object" && "id" in msg) {
+        sendError(msg.id, -32600, "Invalid Request");
+      }
+      continue;
+    }
+    dispatch(msg);
   }
 });
-
-await server.connect(new StdioServerTransport());
+process.stdin.on("end", () => process.exit(0));

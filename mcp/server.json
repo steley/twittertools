@@ -9,12 +9,12 @@
     "source": "github",
     "subfolder": "mcp"
   },
-  "version": "1.0.2",
+  "version": "1.1.0",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "twittertools-mcp",
-      "version": "1.0.2",
+      "version": "1.1.0",
       "transport": {
         "type": "stdio"
       },

@@ -210,4 +210,22 @@ describe('twittertools MCP server (stdio)', () => {
     expect(res.result.isError).toBe(true);
     expect(res.result.content[0].text).toContain('url_or_id');
   });
+
+  it('answers ping with an empty result', async () => {
+    const res = await client.request('ping', {});
+    expect(res.result).toEqual({});
+  });
+
+  it('returns method-not-found for unknown requests', async () => {
+    const res = await client.request('resources/list', {});
+    expect(res.error).toEqual({ code: -32601, message: expect.stringContaining('resources/list') });
+  });
+
+  it('survives malformed lines and unknown notifications', async () => {
+    client.child.stdin.write('this is not json\n');
+    client.notify('some/unknown/notification', {});
+    // the server must keep serving after both
+    const res = await client.request('ping', {});
+    expect(res.result).toEqual({});
+  });
 });

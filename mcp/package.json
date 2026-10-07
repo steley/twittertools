@@ -1,6 +1,6 @@
 {
   "name": "twittertools-mcp",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "mcpName": "io.github.steley/twittertools-mcp",
   "description": "MCP server for twittertools.com — fetch X (Twitter) posts and threads, count and split posts with X's real rules. No login, no tracking.",
   "license": "MIT",
@@ -33,8 +33,5 @@
   "bugs": "https://github.com/steley/twittertools/issues",
   "scripts": {
     "start": "node server.js"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0"
   }
 }
