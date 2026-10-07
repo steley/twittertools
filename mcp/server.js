@@ -26,7 +26,7 @@ import {
 } from "./xrules.js";
 
 const NAME = "twittertools";
-const VERSION = "1.0.0"; // keep in sync with package.json
+const VERSION = "1.0.1"; // keep in sync with package.json
 const API_BASE = (process.env.TWITTERTOOLS_API_BASE || "https://twittertools.com").replace(/\/+$/, "");
 const ATTRIBUTION = "\n\nvia twittertools.com";
 const TEXT_INPUT_MAX = 100_000; // generous, but caps local work per call
