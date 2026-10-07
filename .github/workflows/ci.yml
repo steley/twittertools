@@ -24,6 +24,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm ci --prefix mcp   # mcp server deps (its tests run under the root vitest)
       - run: npx astro check
       - run: npx vitest run
       - run: npm run build

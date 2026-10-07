@@ -12,3 +12,4 @@ tweet_cache.json
 # security audit working files — never publish the attack-surface map
 /audit/
 /AUDIT-REPORT.md
+AGENTS.md

@@ -40,6 +40,13 @@ only provides a stateless media proxy when a download needs one.
 
 - [URL & ID Parser](https://twittertools.com/tweet-url-parser/) — convert post URLs to IDs and Snowflake timestamps, and back
 
+### For AI agents
+
+[TwitterTools MCP](mcp/) — a [Model Context Protocol](https://modelcontextprotocol.io)
+server (`npx twittertools-mcp`) that lets AI assistants fetch posts and threads,
+count characters, and split text with X's real rules. No login, no tracking.
+
+
 ### Highlight: a privacy-first bookmark manager
 
 [Bookmark Manager](https://twittertools.com/bookmark-manager/) is the most distinctive

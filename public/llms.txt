@@ -1,0 +1,29 @@
+# TwitterTools
+
+> Free, open-source toolkit for X (Twitter). Ten tools, no login, no tracking.
+> Site: https://twittertools.com · Source: https://github.com/steley/twittertools
+
+## Tools (browser-based, no account)
+
+- [Video Downloader](https://twittertools.com/twitter-video-downloader/) — save videos & GIFs as MP4
+- [Image Downloader](https://twittertools.com/twitter-image-downloader/) — original-resolution photos
+- [Thread Reader](https://twittertools.com/twitter-thread-reader/) — unroll threads, export Markdown/TXT/HTML/PDF
+- [Advanced Search Builder](https://twittertools.com/twitter-advanced-search-builder/) — GUI for X search operators
+- [Tweet Splitter](https://twittertools.com/tweet-splitter/) — split long text into a numbered thread
+- [Character Counter](https://twittertools.com/tweet-character-counter/) — X's real weighted counting (CJK ×2, links = 23)
+- [Font Generator](https://twittertools.com/twitter-font-generator/) — Unicode styles for posts and bios
+- [Screenshot Generator](https://twittertools.com/tweet-screenshot-generator/) — polished PNG cards of any post
+- [URL & ID Parser](https://twittertools.com/tweet-url-parser/) — post URLs ↔ IDs ↔ Snowflake timestamps
+- [Bookmark Manager](https://twittertools.com/bookmark-manager/) — local-first bookmark library (PWA)
+
+## Public API (stateless, no keys, rate-limited per IP)
+
+- `GET https://twittertools.com/api/tweet?id={url-or-id}` → `{tweet}` — text, author, media with direct CDN URLs
+- `GET https://twittertools.com/api/thread?url={url-or-id}` → `{tweets, partial, reason?}` — thread unroll (paste the LAST post for the full chain)
+- `GET https://twittertools.com/api/download?url={pbs/video.twimg.com-url}&name={filename}` → proxied media stream
+
+## MCP server for AI agents
+
+- `npx twittertools-mcp` — stdio MCP server exposing `get_tweet`, `get_thread`,
+  `count_chars`, `split_thread`, `parse_tweet_url`
+- Docs: https://github.com/steley/twittertools/tree/main/mcp

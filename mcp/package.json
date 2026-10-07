@@ -1,0 +1,39 @@
+{
+  "name": "twittertools-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for twittertools.com — fetch X (Twitter) posts and threads, count and split posts with X's real rules. No login, no tracking.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "twittertools-mcp": "server.js"
+  },
+  "files": [
+    "server.js",
+    "xrules.js"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "twitter",
+    "x",
+    "tweet",
+    "thread",
+    "twittertools"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/steley/twittertools.git",
+    "directory": "mcp"
+  },
+  "homepage": "https://twittertools.com",
+  "bugs": "https://github.com/steley/twittertools/issues",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}
