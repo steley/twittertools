@@ -76,8 +76,17 @@ jobs:
           REMOTE=$(curl -fsSL "https://registry.modelcontextprotocol.io/v0.1/servers?search=twittertools-mcp" \
             | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);const s=(j.servers||[]).map(e=>e.server).find(s=>s.name==='io.github.steley/twittertools-mcp');console.log((s&&s.version)||'')})")
           if [ "$NPM_PUBLISHED" = "true" ] || [ "$LOCAL" != "$REMOTE" ]; then
-            mcp-publisher login github-oidc
-            mcp-publisher publish
+            # the registry validates the npm package and can read a stale
+            # cached packument right after a release — retry with backoff
+            for i in 1 2 3 4; do
+              if mcp-publisher login github-oidc && mcp-publisher publish; then
+                exit 0
+              fi
+              echo "registry publish attempt $i failed — retrying in 30s"
+              sleep 30
+            done
+            echo "registry publish failed after 4 attempts"
+            exit 1
           else
             echo "Registry already lists version ${LOCAL} — skipping"
           fi
