@@ -1,0 +1,32 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.steley/twittertools-mcp",
+  "title": "TwitterTools MCP",
+  "description": "Fetch public X (Twitter) posts and threads, and count or split text with X's real rules. No login, no tracking, no API keys.",
+  "websiteUrl": "https://twittertools.com",
+  "repository": {
+    "url": "https://github.com/steley/twittertools",
+    "source": "github",
+    "subfolder": "mcp"
+  },
+  "version": "1.0.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "twittertools-mcp",
+      "version": "1.0.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "TWITTERTOOLS_API_BASE",
+          "description": "API base of a self-hosted twittertools instance (default: https://twittertools.com)",
+          "isRequired": false,
+          "format": "string",
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
