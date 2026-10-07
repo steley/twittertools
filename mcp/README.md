@@ -47,6 +47,10 @@ Or add it to any client that reads an `mcpServers` config
 
 Requires Node 18+.
 
+> Tip: `npx` resolves the latest version from the registry on every launch
+> (instant once cached, a few seconds the very first time). For zero startup
+> delay, `npm i -g twittertools-mcp` once and set `"command": "twittertools-mcp"`.
+
 ## Self-hosting
 
 Point `TWITTERTOOLS_API_BASE` at your own instance of

@@ -29,9 +29,9 @@ import {
 } from "./xrules.js";
 
 const NAME = "twittertools";
-const VERSION = "1.1.0"; // keep in sync with package.json
+const VERSION = "1.1.1"; // keep in sync with package.json
 const API_BASE = (process.env.TWITTERTOOLS_API_BASE || "https://twittertools.com").replace(/\/+$/, "");
-const ATTRIBUTION = "\n\nvia twittertools.com";
+const VIA = "https://twittertools.com";
 const TEXT_INPUT_MAX = 100_000; // generous, but caps local work per call
 
 const urlOrIdSchema = {
@@ -152,7 +152,9 @@ async function callTool(name, args) {
     case "get_tweet": {
       const data = await callApi("tweet", { id: strArg(args, "url_or_id") });
       if (!data?.tweet) throw new Error("twittertools API returned no tweet");
-      return textResult(JSON.stringify(data.tweet, null, 2) + ATTRIBUTION);
+      // attribution rides inside the JSON: clients that pretty-render tool
+      // results would strip a trailing signature line appended after it
+      return textResult(JSON.stringify({ tweet: data.tweet, via: VIA }, null, 2));
     }
     case "get_thread": {
       const data = await callApi("thread", { url: strArg(args, "url_or_id") });
@@ -160,7 +162,7 @@ async function callTool(name, args) {
       const head = data.partial
         ? `Note: this thread result is PARTIAL (${data.reason || "incomplete"}) — posts may be missing.\n\n`
         : "";
-      return textResult(head + JSON.stringify({ count: data.tweets.length, tweets: data.tweets }, null, 2) + ATTRIBUTION);
+      return textResult(head + JSON.stringify({ count: data.tweets.length, tweets: data.tweets, via: VIA }, null, 2));
     }
     case "count_chars":
       return textResult(JSON.stringify(countTweet(strArg(args, "text", TEXT_INPUT_MAX)), null, 2));

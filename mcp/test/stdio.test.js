@@ -148,7 +148,7 @@ describe('twittertools MCP server (stdio)', () => {
     const text = res.result.content[0].text;
     expect(text).toContain('hello from the mock');
     expect(text).toContain('pbs.twimg.com/media/mock.jpg');
-    expect(text).toContain('via twittertools.com');
+    expect(text).toContain('"via": "https://twittertools.com"');
   });
 
   it('get_tweet surfaces the API error for a missing post', async () => {
