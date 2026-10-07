@@ -3,6 +3,7 @@
 [Model Context Protocol](https://modelcontextprotocol.io) server for
 [TwitterTools](https://twittertools.com) — brings the toolkit to AI agents
 (Claude, ChatGPT, Cursor, ZCode, …). No login, no tracking, no API keys.
+Listed in the official MCP Registry as `io.github.steley/twittertools-mcp`.
 
 ## Tools
 
