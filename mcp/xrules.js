@@ -217,19 +217,23 @@ const STATUS_RE =
   /(?:^|[^A-Za-z0-9-])(?:https?:\/\/)?(?:www\.|mobile\.)?(?:x|twitter)\.com\/([A-Za-z0-9_]{1,15})\/status(?:es)?\/(\d{5,25})/i;
 const BARE_ID_RE = /^\d{5,25}$/;
 
-/** Extract a status id (and screen name when present) from a URL, bare ID, or free text. */
+/** Extract a status id (and screen name when present) from a URL, bare ID, or free
+ * text. `source` records which form matched — the one field the standalone port
+ * adds beyond the TypeScript original. */
 export function parseTweetInput(input) {
   const text = (input ?? '').trim();
   if (!text) return null;
 
   const m = text.match(STATUS_RE);
-  if (m) return { id: m[2], screenName: m[1].toLowerCase() === 'i' ? null : m[1] };
+  if (m) return { id: m[2], screenName: m[1].toLowerCase() === 'i' ? null : m[1], source: 'url' };
 
-  if (BARE_ID_RE.test(text)) return { id: text, screenName: null };
+  if (BARE_ID_RE.test(text)) return { id: text, screenName: null, source: 'bare_id' };
 
-  // A bare ID hidden inside longer text
-  const idMatch = text.match(/(\d{15,25})/);
-  if (idMatch) return { id: idMatch[1], screenName: null };
+  // A bare ID hidden inside longer text. Both edges are digit-guarded so a
+  // longer digit run (order number, hash) yields nothing instead of a
+  // silently clipped pseudo-ID.
+  const idMatch = text.match(/(?<!\d)(\d{15,25})(?!\d)/);
+  if (idMatch) return { id: idMatch[1], screenName: null, source: 'text' };
 
   return null;
 }

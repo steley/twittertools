@@ -29,7 +29,12 @@ import {
 } from "./xrules.js";
 
 const NAME = "twittertools";
-const VERSION = "1.2.0"; // keep in sync with package.json
+const VERSION = "1.2.1"; // keep in sync with package.json
+// Protocol versions this server can honestly claim: across these revisions the
+// four verbs used here (initialize, tools/list, tools/call, ping) kept their
+// shapes, and the additions (icons, tasks, elicitation, …) are all optional
+// features a tools-only stdio server never touches.
+const SUPPORTED_VERSIONS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 const API_BASE = (process.env.TWITTERTOOLS_API_BASE || "https://twittertools.com").replace(/\/+$/, "");
 const VIA = "https://twittertools.com";
 const TEXT_INPUT_MAX = 100_000; // generous, but caps local work per call
@@ -202,6 +207,7 @@ async function callTool(name, args) {
         JSON.stringify(
           {
             id: parsed.id,
+            source: parsed.source,
             screenName: parsed.screenName,
             createdAt: Number.isNaN(created.getTime()) ? null : created.toISOString(),
             permalink: permalinkFor(parsed.id, parsed.screenName),
@@ -237,15 +243,20 @@ async function dispatch(msg) {
   const isRequest = "id" in msg;
   try {
     switch (method) {
-      case "initialize":
-        // echo the client's requested version: every current client accepts
-        // its own, and we make no use of newer protocol features
+      case "initialize": {
+        // Answer with a version we actually implement: echoing whatever the
+        // client asked for would claim support for versions we've never seen.
+        // A client that can't accept our answer disconnects, per spec.
+        const requested = params?.protocolVersion;
         sendResult(id, {
-          protocolVersion: params?.protocolVersion || "2024-11-05",
+          protocolVersion: SUPPORTED_VERSIONS.includes(requested)
+            ? requested
+            : SUPPORTED_VERSIONS[0],
           capabilities: { tools: {} },
           serverInfo: { name: NAME, version: VERSION },
         });
         return;
+      }
       case "notifications/initialized":
         return; // notification — no response
       case "tools/list":

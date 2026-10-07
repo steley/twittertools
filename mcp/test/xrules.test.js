@@ -76,6 +76,7 @@ describe('parseTweetInput / snowflakeToDate', () => {
     expect(parseTweetInput('https://x.com/user/status/1500000000000000000')).toEqual({
       id: '1500000000000000000',
       screenName: 'user',
+      source: 'url',
     });
   });
 
@@ -88,8 +89,22 @@ describe('parseTweetInput / snowflakeToDate', () => {
   });
 
   it('parses bare ids and ids inside longer text', () => {
-    expect(parseTweetInput('1500000000000000000')?.id).toBe('1500000000000000000');
-    expect(parseTweetInput('look at this one 1500000000000000000!')?.id).toBe('1500000000000000000');
+    expect(parseTweetInput('1500000000000000000')).toMatchObject({
+      id: '1500000000000000000',
+      source: 'bare_id',
+    });
+    expect(parseTweetInput('look at this one 1500000000000000000!')).toMatchObject({
+      id: '1500000000000000000',
+      source: 'text',
+    });
+  });
+
+  it('takes a digit run only at its full length, never clipped', () => {
+    // the whole run fits the 15-25 window → parsed
+    expect(parseTweetInput('ref 1234567890123456789012345 end')?.id).toBe('1234567890123456789012345');
+    // a longer run (order number, hash) yields nothing, not a clipped prefix
+    expect(parseTweetInput('order 123456789012345678901234567890')).toBeNull();
+    expect(parseTweetInput('123456789012345678901234567890')).toBeNull();
   });
 
   it('treats the literal i as no screen name and rejects text without an id', () => {

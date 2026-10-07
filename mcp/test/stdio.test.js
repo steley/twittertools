@@ -128,6 +128,14 @@ afterAll(async () => {
 });
 
 describe('twittertools MCP server (stdio)', () => {
+  it('negotiates initialize: echoes supported versions, answers others with our latest', async () => {
+    const same = await client.request('initialize', { protocolVersion: '2025-03-26' });
+    expect(same.result.protocolVersion).toBe('2025-03-26');
+
+    const future = await client.request('initialize', { protocolVersion: '2099-01-01' });
+    expect(future.result.protocolVersion).toBe('2025-11-25');
+  });
+
   it('lists the five tools', async () => {
     const res = await client.request('tools/list', {});
     expect(res.result.tools.map((t) => t.name)).toEqual([
@@ -199,10 +207,32 @@ describe('twittertools MCP server (stdio)', () => {
     });
     expect(JSON.parse(res.result.content[0].text)).toEqual({
       id: '1500000000000000000',
+      source: 'url',
       screenName: 'user',
       createdAt: '2022-03-05T06:47:23.309Z',
       permalink: 'https://x.com/user/status/1500000000000000000',
     });
+  });
+
+  it('parse_tweet_url tags where a bare or free-text id came from', async () => {
+    const bare = await client.request('tools/call', {
+      name: 'parse_tweet_url',
+      arguments: { input: '1500000000000000000' },
+    });
+    expect(JSON.parse(bare.result.content[0].text).source).toBe('bare_id');
+
+    const free = await client.request('tools/call', {
+      name: 'parse_tweet_url',
+      arguments: { input: 'look at this one 1500000000000000000!' },
+    });
+    expect(JSON.parse(free.result.content[0].text).source).toBe('text');
+
+    const none = await client.request('tools/call', {
+      name: 'parse_tweet_url',
+      arguments: { input: 'order 123456789012345678901234567890' },
+    });
+    expect(none.result.isError).toBe(true);
+    expect(none.result.content[0].text).toContain('No post URL or ID found');
   });
 
   it('fails fast on future-dated (impossible) ids without misleading attribution', async () => {
