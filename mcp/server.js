@@ -29,7 +29,7 @@ import {
 } from "./xrules.js";
 
 const NAME = "twittertools";
-const VERSION = "1.1.1"; // keep in sync with package.json
+const VERSION = "1.2.0"; // keep in sync with package.json
 const API_BASE = (process.env.TWITTERTOOLS_API_BASE || "https://twittertools.com").replace(/\/+$/, "");
 const VIA = "https://twittertools.com";
 const TEXT_INPUT_MAX = 100_000; // generous, but caps local work per call
@@ -147,17 +147,38 @@ async function callApi(endpoint, params) {
   return body;
 }
 
+// A Snowflake id encodes the creation time, so an id decoding to the future
+// cannot belong to any post — X's endpoint still withholds those like
+// sensitive content. Fail fast (no upstream call) with the real cause instead
+// of relaying a misleading login-wall message for what is likely a typo.
+function impossibleIdError(input) {
+  const parsed = parseTweetInput(input);
+  if (!parsed) return null;
+  const created = snowflakeToDate(parsed.id);
+  if (Number.isNaN(created.getTime()) || created.getTime() <= Date.now() + 60_000) return null;
+  return textResult(
+    `Post not found — this ID encodes a posting date in the future (${created.toISOString()}), so no post can have it. Check the number for typos.`,
+    { error: true }
+  );
+}
+
 async function callTool(name, args) {
   switch (name) {
     case "get_tweet": {
-      const data = await callApi("tweet", { id: strArg(args, "url_or_id") });
+      const input = strArg(args, "url_or_id");
+      const impossible = impossibleIdError(input);
+      if (impossible) return impossible;
+      const data = await callApi("tweet", { id: input });
       if (!data?.tweet) throw new Error("twittertools API returned no tweet");
       // attribution rides inside the JSON: clients that pretty-render tool
       // results would strip a trailing signature line appended after it
       return textResult(JSON.stringify({ tweet: data.tweet, via: VIA }, null, 2));
     }
     case "get_thread": {
-      const data = await callApi("thread", { url: strArg(args, "url_or_id") });
+      const input = strArg(args, "url_or_id");
+      const impossible = impossibleIdError(input);
+      if (impossible) return impossible;
+      const data = await callApi("thread", { url: input });
       if (!data?.tweets) throw new Error("twittertools API returned no thread");
       const head = data.partial
         ? `Note: this thread result is PARTIAL (${data.reason || "incomplete"}) — posts may be missing.\n\n`

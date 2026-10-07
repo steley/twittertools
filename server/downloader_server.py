@@ -500,13 +500,36 @@ def json_error(status: int, message: str) -> web.Response:
     return web.json_response({"error": message}, status=status)
 
 
-def syndication_error_response(status: int) -> web.Response:
+# X_EPOCH_MS: tweet snowflakes encode the creation time — (id >> 22) + epoch.
+X_EPOCH_MS = 1288834974657
+# X mints ids at post time, so an id decoding to the future cannot belong to
+# any post. The syndication endpoint answers the same withholding tombstone
+# for nonexistent ids as for login-walled ones — this separates a typo from
+# genuinely hidden content instead of blaming sensitive media.
+FUTURE_ID_SKEW_MS = 60_000
+
+
+def _impossible_tweet_id(tweet_id: str) -> bool:
+    try:
+        ms = (int(tweet_id) >> 22) + X_EPOCH_MS
+    except ValueError:
+        return False
+    return ms > time.time() * 1000 + FUTURE_ID_SKEW_MS
+
+
+def syndication_error_response(status: int, tweet_id: Optional[str] = None) -> web.Response:
     """Translate an upstream fetch status into an API error the frontend
     shows verbatim.
 
     NOTE: never answer HTTP 502 here. The production stack (Apache/Cloudflare)
     replaces origin 502 bodies with its own terse error page, which would
     strip the JSON message below — 503 passes through untouched."""
+    if status in (401, 403) and tweet_id and _impossible_tweet_id(tweet_id):
+        return json_error(
+            404,
+            "Post not found — the number encodes a posting date in the future, "
+            "so no post can have this ID (a typo?).",
+        )
     if status == 404:
         return json_error(404, "Post not found — it may be deleted, protected, or the link is wrong.")
     if status == 403:
@@ -1038,7 +1061,7 @@ async def api_tweet(request: web.Request) -> web.Response:
             return web.json_response({"tweet": payload, "cached": True})
         status = payload
 
-    return syndication_error_response(status)
+    return syndication_error_response(status, tweet_id)
 
 
 async def api_thread(request: web.Request) -> web.Response:
@@ -1064,7 +1087,7 @@ async def api_thread(request: web.Request) -> web.Response:
         kind, payload = await fut
         if kind == "ok":
             return web.json_response({**payload, "cached": True})
-        return syndication_error_response(payload)
+        return syndication_error_response(payload, tweet_id)
     fut = asyncio.get_running_loop().create_future()
     thread_inflight[cache_key] = fut
     try:
@@ -1075,7 +1098,7 @@ async def api_thread(request: web.Request) -> web.Response:
             # the root post itself failed: report the real cause, not a blanket 404
             fut.set_result(("error", status))
             thread_inflight.pop(cache_key, None)  # failed walks must be retryable
-            return syndication_error_response(status)
+            return syndication_error_response(status, tweet_id)
         result = {"tweets": tweets, "partial": partial, "reason": reason}
         tweet_cache.put(cache_key, result)
         fut.set_result(("ok", result))

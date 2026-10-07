@@ -122,6 +122,10 @@ FIXTURES = {
 RESTRICTED_ID = "1212121212121212121"
 # ...and this one with the tombstone variant of the same withholding
 TOMBSTONED_ID = "1919191919191919191"
+# a snowflake id decoding ~10 years into the future: physically impossible,
+# yet X's endpoint withholds it exactly like a sensitive post — the server
+# must answer "not found", not the login-wall message
+FUTURE_ID = str((((int(time.time() * 1000) + 315576000000) - 1288834974657) << 22) | 1)
 
 NOTE_FULL_TEXT = "the full body of the note, with a link https://t.co/ghlink"
 NOTE_URL_ENTITIES = [
@@ -143,6 +147,9 @@ async def mock_syndication(request):
         # the same withholding, in the tombstone shape X serves when a token
         # was sent (and in some regions) — must map to the same friendly 403
         return web.json_response({"__typename": "TweetTombstone", "tombstone": {}})
+    if tid == FUTURE_ID:
+        # nonexistent ids get the same withholding treatment from X
+        return web.json_response({})
     data = FIXTURES.get(tid)
     if data is None:
         return web.json_response({"detail": "No status found"}, status=404)
@@ -422,6 +429,23 @@ def run_checks():
     check(
         "tombstoned post -> explained 403",
         code == 403 and "logged-in users" in data.get("error", ""),
+        f"{code} {body[:140]}",
+    )
+
+    # 4c. a future-dated snowflake cannot exist: even though X withholds it
+    # like sensitive content, the answer must say "not found" with the why
+    code, _, body = get(f"/api/tweet?id={FUTURE_ID}")
+    data = json.loads(body)
+    check(
+        "future-dated id -> not-found 404",
+        code == 404 and "future" in data.get("error", ""),
+        f"{code} {body[:140]}",
+    )
+    code, _, body = get(f"/api/thread?url={FUTURE_ID}")
+    data = json.loads(body)
+    check(
+        "future-dated thread root -> not-found 404",
+        code == 404 and "future" in data.get("error", ""),
         f"{code} {body[:140]}",
     )
 

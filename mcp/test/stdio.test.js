@@ -205,6 +205,17 @@ describe('twittertools MCP server (stdio)', () => {
     });
   });
 
+  it('fails fast on future-dated (impossible) ids without misleading attribution', async () => {
+    const FUTURE_ID = (((BigInt(Date.now() + 315_576_000_000) - 1288834974657n) << 22n) | 1n).toString();
+    const res = await client.request('tools/call', {
+      name: 'get_tweet',
+      arguments: { url_or_id: FUTURE_ID },
+    });
+    expect(res.result.isError).toBe(true);
+    expect(res.result.content[0].text).toContain('future');
+    expect(res.result.content[0].text).toContain('Post not found');
+  });
+
   it('rejects missing arguments with a tool error', async () => {
     const res = await client.request('tools/call', { name: 'get_tweet', arguments: {} });
     expect(res.result.isError).toBe(true);
