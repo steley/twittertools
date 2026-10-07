@@ -1,0 +1,108 @@
+---
+import Base from '../layouts/Base.astro';
+
+const seoDescription =
+  "TwitterTools MCP: fetch public X (Twitter) posts and threads, count and split posts with X's real rules — from Claude Code, Claude Desktop, Cursor, Codex and any MCP client. No login, no API key, no tracking.";
+
+const mcpLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'twittertools-mcp',
+  applicationCategory: 'DeveloperApplication',
+  operatingSystem: 'Node.js 18+',
+  url: 'https://twittertools.com/mcp/',
+  description:
+    'MCP server for twittertools.com — public X posts and threads for AI agents. Zero dependencies, no login, no tracking.',
+  offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+};
+
+const tools = [
+  { name: 'get_tweet', desc: 'Fetch one public post: text, author, engagement counts, media with direct CDN URLs.' },
+  { name: 'get_thread', desc: 'Unroll a thread into its posts in order (partial results are flagged).' },
+  { name: 'count_chars', desc: "Measure text against X's real 280-character limit (CJK ×2, links = 23)." },
+  { name: 'split_thread', desc: 'Split long text into numbered, limit-fitting posts.' },
+  { name: 'parse_tweet_url', desc: 'Post URL or ID → ID, author handle, posting time, canonical permalink.' },
+];
+
+const installJson = `{
+  "mcpServers": {
+    "twittertools": {
+      "command": "npx",
+      "args": ["-y", "twittertools-mcp"]
+    }
+  }
+}`;
+---
+
+<Base title="TwitterTools MCP — X posts for AI agents | TwitterTools" description={seoDescription} path="/mcp/" jsonLd={[mcpLd]}>
+  <div class="prose-none mx-auto max-w-3xl">
+    <h1 class="text-3xl font-bold tracking-tight sm:text-4xl">
+      Twitter<span class="text-brand">Tools</span> MCP
+    </h1>
+    <p class="mt-3 text-lg text-slate-600">
+      Use X (Twitter) posts and threads directly from AI assistants — Claude Code, Claude Desktop,
+      Cursor, Codex, or any client that speaks the
+      <a href="https://modelcontextprotocol.io" class="text-brand hover:underline">Model Context Protocol</a>.
+    </p>
+
+    <section class="mt-10">
+      <h2 class="text-xl font-bold">Install</h2>
+      <p class="mt-2 text-slate-700">One command for Claude Code:</p>
+      <div class="mt-3 overflow-x-auto rounded-xl bg-slate-900 p-4">
+        <pre class="text-sm text-slate-100"><code>claude mcp add twittertools -- npx -y twittertools-mcp</code></pre>
+      </div>
+      <p class="mt-4 text-slate-700">
+        Or paste this into any client that reads an <code class="rounded bg-slate-200 px-1 py-0.5 text-sm">mcpServers</code>
+        config (Claude Desktop's <code class="rounded bg-slate-200 px-1 py-0.5 text-sm">claude_desktop_config.json</code>,
+        Cursor's <code class="rounded bg-slate-200 px-1 py-0.5 text-sm">.cursor/mcp.json</code>, …):
+      </p>
+      <div class="mt-3 overflow-x-auto rounded-xl bg-slate-900 p-4">
+        <pre class="text-sm text-slate-100"><code>{installJson}</code></pre>
+      </div>
+      <p class="mt-3 text-sm text-slate-500">Requires Node 18+. The first launch resolves the package from npm; every launch after that is instant.</p>
+    </section>
+
+    <section class="mt-10">
+      <h2 class="text-xl font-bold">What your agent gets</h2>
+      <ul class="mt-3 divide-y divide-slate-200 rounded-xl border border-slate-200 bg-white">
+        {
+          tools.map((t) => (
+            <li class="flex flex-col gap-1 px-4 py-3 sm:flex-row sm:items-baseline sm:gap-4">
+              <code class="shrink-0 font-semibold text-brand sm:w-36">{t.name}</code>
+              <span class="text-sm text-slate-600">{t.desc}</span>
+            </li>
+          ))
+        }
+      </ul>
+      <p class="mt-3 text-sm text-slate-500">
+        <code class="rounded bg-slate-200 px-1 py-0.5">count_chars</code>,
+        <code class="rounded bg-slate-200 px-1 py-0.5">split_thread</code> and
+        <code class="rounded bg-slate-200 px-1 py-0.5">parse_tweet_url</code> run entirely offline,
+        on the same engine as this site's tools.
+      </p>
+    </section>
+
+    <section class="mt-10">
+      <h2 class="text-xl font-bold">No login, no API key, no tracking</h2>
+      <p class="mt-2 text-slate-700">
+        The server is stateless — no accounts, no keys, no telemetry, no database. It has
+        <strong>zero npm dependencies</strong>: the entire protocol layer is a few hundred lines
+        you can audit in one sitting. Lookups go straight to X's public endpoint for public posts;
+        deleted, protected or age-restricted posts are not available — to anyone.
+      </p>
+    </section>
+
+    <section class="mt-10">
+      <h2 class="text-xl font-bold">Links</h2>
+      <ul class="mt-3 list-disc space-y-2 pl-5 text-slate-700">
+        <li><a class="text-brand hover:underline" href="https://www.npmjs.com/package/twittertools-mcp">twittertools-mcp on npm</a></li>
+        <li><a class="text-brand hover:underline" href="https://github.com/steley/twittertools/tree/main/mcp">Source (mcp/) on GitHub</a></li>
+        <li><a class="text-brand hover:underline" href="https://registry.modelcontextprotocol.io/">Listed in the official MCP Registry</a> as <code class="rounded bg-slate-200 px-1 py-0.5 text-sm">io.github.steley/twittertools-mcp</code></li>
+      </ul>
+      <p class="mt-4 text-sm text-slate-500">
+        Self-hosting: point <code class="rounded bg-slate-200 px-1 py-0.5">TWITTERTOOLS_API_BASE</code> at
+        your own instance to keep lookups on your infrastructure.
+      </p>
+    </section>
+  </div>
+</Base>
