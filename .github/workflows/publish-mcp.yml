@@ -63,6 +63,16 @@ jobs:
           NPM_PUBLISHED: ${{ steps.npm.outputs.published }}
         run: |
           LOCAL=$(node -p "JSON.parse(require('fs').readFileSync('server.json','utf8')).version")
+          # npm's staging pipeline takes a minute or two to expose a fresh
+          # version, and the registry validates the npm package during publish
+          # — wait until it is queryable before publishing
+          for i in $(seq 1 24); do
+            npm view "twittertools-mcp@${LOCAL}" version >/dev/null 2>&1 && break
+            echo "waiting for npm to expose ${LOCAL} ($i/24)"; sleep 10
+          done
+          npm view "twittertools-mcp@${LOCAL}" version >/dev/null 2>&1 || {
+            echo "npm never exposed ${LOCAL} — not publishing to the registry"; exit 1
+          }
           REMOTE=$(curl -fsSL "https://registry.modelcontextprotocol.io/v0.1/servers?search=twittertools-mcp" \
             | node -e "let d='';process.stdin.on('data',c=>d+=c).on('end',()=>{const j=JSON.parse(d);const s=(j.servers||[]).map(e=>e.server).find(s=>s.name==='io.github.steley/twittertools-mcp');console.log((s&&s.version)||'')})")
           if [ "$NPM_PUBLISHED" = "true" ] || [ "$LOCAL" != "$REMOTE" ]; then
