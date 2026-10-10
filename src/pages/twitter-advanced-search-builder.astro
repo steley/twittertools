@@ -36,6 +36,14 @@ const faq = [
     a: 'No. Typing operators directly into the X search box works on a free account. (Some date-range and engagement filters in X\'s own UI require Premium, but the raw operators keep working from the search box.)',
   },
   {
+    q: 'Can I save a search to reuse later?',
+    a: 'Yes. Click Save next to Copy and your current filters are kept as a chip under the query box — click the chip any time to restore them. You can keep up to 20 saved searches, and the ✕ on a chip deletes it.',
+  },
+  {
+    q: 'Where are my saved searches stored?',
+    a: "Only in your browser's local storage, on your device. They are never uploaded or logged anywhere, and clearing your browser's site data removes them.",
+  },
+  {
     q: 'Where does my search open?',
     a: 'In a new tab on x.com with your query pre-filled, using X\'s own results. TwitterTools never sees your search and nothing is logged.',
   },
@@ -45,7 +53,7 @@ const faq = [
   },
 ];
 
-  const seoDescription = "Build advanced X (Twitter) searches with a simple form — filter by user, date, likes, language. Operators like from:, min_faves: and since: generated for you.";
+  const seoDescription = "Build advanced X (Twitter) searches with a simple form — filter by user, date, likes, language. Operators like from:, min_faves: and since: generated for you, and save your searches to reuse.";
 const tool = TOOLS.find((t) => t.slug === '/twitter-advanced-search-builder/')!;
   const related = tool.related.map((s) => TOOLS.find((t) => t.slug === s)!);
   const toolLd = {
@@ -68,7 +76,7 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-advanced-search-builder/')!;
 >
   <ToolHero
     title="X Advanced Search Builder"
-    subtitle="Fill in what you're looking for — get a ready-to-paste search query with all the operators, and open it on X in one click."
+    subtitle="Fill in what you're looking for — get a ready-to-paste search query with all the operators, open it on X in one click, and save your go-to searches for later."
   />
 
   <section class="rounded-2xl border border-slate-200 bg-white p-5 sm:p-6">
@@ -158,9 +166,14 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-advanced-search-builder/')!;
     <div class="mt-6 rounded-xl bg-slate-900 p-4">
       <div class="flex items-center justify-between gap-3">
         <p class="text-xs font-medium uppercase tracking-wide text-slate-400">Generated query</p>
-        <button id="s-copy" class="rounded-lg border border-slate-600 px-3 py-1 text-xs text-slate-300 hover:border-brand hover:text-brand">
-          Copy
-        </button>
+        <div class="flex items-center gap-2">
+          <button id="s-copy" class="rounded-lg border border-slate-600 px-3 py-1 text-xs text-slate-300 hover:border-brand hover:text-brand">
+            Copy
+          </button>
+          <button id="s-save" class="rounded-lg border border-slate-600 px-3 py-1 text-xs text-slate-300 hover:border-brand hover:text-brand">
+            Save
+          </button>
+        </div>
       </div>
       <p id="s-query" class="mt-2 min-h-6 break-all font-mono text-sm text-emerald-300">—</p>
       <a
@@ -173,6 +186,8 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-advanced-search-builder/')!;
         Open in X Search ↗
       </a>
     </div>
+
+    <div id="s-saved" class="mt-3 hidden flex-wrap items-center gap-2 text-xs"></div>
   </section>
 
   <AdSlot />
@@ -346,4 +361,75 @@ const tool = TOOLS.find((t) => t.slug === '/twitter-advanced-search-builder/')!;
     btn.textContent = 'Copied!';
     setTimeout(() => (btn.textContent = old), 1200);
   });
+
+  // Saved searches — localStorage only, never sent anywhere.
+  const savedKey = 'sb-saved-searches';
+  const SAVED_LIMIT = 20;
+  const savedWrap = document.getElementById('s-saved')!;
+  const isCheckbox = (el: HTMLInputElement) => el.type === 'checkbox';
+
+  const readSaved = (): { q: string; v: Record<string, string | boolean> }[] => {
+    try {
+      return JSON.parse(localStorage.getItem(savedKey) || '[]');
+    } catch {
+      return [];
+    }
+  };
+
+  function serialize(): Record<string, string | boolean> {
+    const v: Record<string, string | boolean> = {};
+    for (const [k, el] of Object.entries(fields)) v[k] = isCheckbox(el) ? el.checked : el.value;
+    return v;
+  }
+
+  function restore(v: Record<string, string | boolean>) {
+    for (const [k, el] of Object.entries(fields)) {
+      if (isCheckbox(el)) el.checked = !!v[k];
+      else el.value = (v[k] as string) || '';
+    }
+    render();
+  }
+
+  function renderSaved() {
+    const saved = readSaved();
+    savedWrap.replaceChildren();
+    savedWrap.classList.toggle('hidden', saved.length === 0);
+    saved.forEach((s, i) => {
+      const chip = document.createElement('span');
+      chip.className = 'inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white py-1 pl-3 pr-1';
+      const load = document.createElement('button');
+      load.textContent = s.q || '(empty)';
+      load.className = 'max-w-72 truncate font-medium text-slate-600 hover:text-brand';
+      load.title = 'Load this search into the form';
+      load.addEventListener('click', () => restore(s.v));
+      const del = document.createElement('button');
+      del.textContent = '✕';
+      del.className = 'rounded-full px-1.5 text-slate-400 hover:text-red-500';
+      del.setAttribute('aria-label', 'Delete saved search');
+      del.addEventListener('click', () => {
+        const all = readSaved();
+        all.splice(i, 1);
+        localStorage.setItem(savedKey, JSON.stringify(all));
+        renderSaved();
+      });
+      chip.append(load, del);
+      savedWrap.appendChild(chip);
+    });
+  }
+
+  document.getElementById('s-save')!.addEventListener('click', () => {
+    const q = buildQuery();
+    if (!q) return;
+    const saved = readSaved();
+    const existing = saved.findIndex((s) => s.q === q);
+    if (existing >= 0) saved.splice(existing, 1);
+    else if (saved.length >= SAVED_LIMIT) {
+      alert(`Saved searches are full (${SAVED_LIMIT}) — delete one first.`);
+      return;
+    }
+    saved.unshift({ q, v: serialize() });
+    localStorage.setItem(savedKey, JSON.stringify(saved));
+    renderSaved();
+  });
+  renderSaved();
 </script>
