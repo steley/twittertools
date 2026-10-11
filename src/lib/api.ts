@@ -175,6 +175,48 @@ export function clearCdnDirectBlocked(): void {
  * inline-disposition: iOS Safari refuses to render attachment-served media.
  * Once a direct failure is on record, subsequent images skip the probe and
  * load through the proxy immediately. */
+// The proxy swap goes through /api/download, whose per-IP budget is
+// 40/60s — a media-heavy thread swapping all previews at once burns it in
+// a second and half the images 429 (seen in the access log). Throttle the
+// swaps client-side; raise here if the backend budget is ever raised.
+const PROXY_IMG_LIMIT = 3;
+let proxyImgActive = 0;
+const proxyImgWaiting: Array<() => void> = [];
+
+/** Load `url` into `img` through the proxy, at most PROXY_IMG_LIMIT at a
+ * time (module-level FIFO). Exported for tests. */
+export function loadProxyImg(img: HTMLImageElement, url: string): void {
+  const start = () => {
+    const done = () => {
+      proxyImgActive--;
+      const next = proxyImgWaiting.shift();
+      if (next) {
+        proxyImgActive++;
+        next();
+      }
+    };
+    if (!img.isConnected) {
+      done();
+      return;
+    }
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      done();
+    };
+    img.addEventListener('load', settle, { once: true });
+    img.addEventListener('error', settle, { once: true });
+    img.src = url;
+  };
+  if (proxyImgActive < PROXY_IMG_LIMIT) {
+    proxyImgActive++;
+    start();
+  } else {
+    proxyImgWaiting.push(start);
+  }
+}
+
 export function wireMediaImg(img: HTMLImageElement, mediaUrl: string, filename: string, timeoutMs = 2500): void {
   img.referrerPolicy = 'no-referrer';
   let host = '';
@@ -196,7 +238,7 @@ export function wireMediaImg(img: HTMLImageElement, mediaUrl: string, filename: 
     // would never display on networks where the CDN is blocked
     img.srcset = '';
     img.sizes = '';
-    img.src = proxiedDownloadUrl(mediaUrl, filename, true);
+    loadProxyImg(img, proxiedDownloadUrl(mediaUrl, filename, true));
   };
   img.onerror = () => swap(false);
   // a direct success proves the CDN is reachable again — back to direct
